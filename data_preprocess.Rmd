@@ -1,0 +1,611 @@
+---
+title: "Glioma data gather and split"
+author: "Vincent L. Cannataro"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+  toc: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(cancereffectsizeR)
+library(tidyverse)
+```
+
+# Gather and filter data
+
+## GLASS data gather and filter 
+```{r GLASS data gather and filter}
+
+# download the "variants_anno" file and "variants_passgeno" file from 
+# https://synapse.org/glass
+
+glass_data_anno <- data.table::fread(file = "input_data/variants_anno_feb9_2020.csv",stringsAsFactors = F)
+glass_data_variants_passgeno <- data.table::fread(file = "input_data/variants_passgeno_feb9_2020.csv",stringsAsFactors = F)
+
+# need to match the reference allele from anno with the 
+# variant in "passgeno"
+
+# just worried about SNP for this analysis
+glass_data_anno <- glass_data_anno[glass_data_anno$variant_type=="SNP",]
+
+# just want SNV and variants that pass filtering
+glass_data_variants_passgeno <- 
+  glass_data_variants_passgeno[glass_data_variants_passgeno$ssm2_pass_call=="t",]
+glass_data_variants_passgeno <- 
+  glass_data_variants_passgeno[
+    glass_data_variants_passgeno$start == glass_data_variants_passgeno$end,] 
+
+head(glass_data_variants_passgeno)
+
+# make a vector that can be used for matching in both data sets 
+matcher_passgeno <- 
+  paste0("g.","chr",
+         glass_data_variants_passgeno$chrom,
+         ":",glass_data_variants_passgeno$start,
+         ">",glass_data_variants_passgeno$alt)
+
+matcher_anno <- strsplit(x = glass_data_anno$genome_change,split = ">")
+
+
+matcher_builder <- function(x){
+  return(paste0(substr(x[1] , 1, nchar(x[1])-1),">",x[2]))
+}
+matcher_anno_vec <- parallel::mclapply(matcher_anno, matcher_builder,mc.cores = 4)
+matcher_anno_vec <- unlist(matcher_anno_vec)
+refs_to_match <- setNames(glass_data_anno$ref,matcher_anno_vec)
+
+# datasets have different representation of chrX
+matcher_passgeno <- gsub(pattern = "chr23:",
+                         replacement = "chrX:",x = matcher_passgeno)
+
+
+# add the reference to passgeno
+glass_data_variants_passgeno$ref <- refs_to_match[matcher_passgeno]
+
+
+
+glass_data_variants_passgeno$chrom <- 
+  gsub(pattern = "23",replacement = "X",x = glass_data_variants_passgeno$chrom)
+save(glass_data_variants_passgeno, file = "output_data/GLASS_data_maf_style_for_analysis.RData")
+
+
+glass_tumor_type <- substr(glass_data_variants_passgeno$aliquot_barcode,14, 15)
+
+unique_tumors_per_type <- data.frame(tumor_name = glass_data_variants_passgeno$aliquot_barcode, tumor_type = glass_tumor_type)
+
+unique_tumors_per_type %>%
+  group_by(tumor_type) %>%
+  summarize(unique_allo = n_distinct(tumor_name))
+
+
+glass_data_primary_tumor <- glass_data_variants_passgeno[glass_tumor_type=="TP",]
+head(glass_data_primary_tumor)
+
+glass_data_primary_tumor$chrom <- gsub(pattern = "23",replacement = "X",
+                                       x = glass_data_primary_tumor$chrom)
+
+# filter out tumors with no detected alternative alleles 
+glass_data_primary_tumor <- glass_data_primary_tumor %>%
+  filter(ad_alt > 1)
+
+save(glass_data_primary_tumor, file = "output_data/GLASS_data_maf_style_for_analysis_justPrimary.RData")
+
+
+# testing the build
+# library(cancereffectsizeR)
+# head(glass_data_variants_passgeno)
+# GLSS_CES <- cancereffectsizeR::CESAnalysis(
+#   maf = as.data.frame(glass_data_primary_tumor,stringsAsFactors=F),
+#   sample_col = "aliquot_barcode",
+#   chr_col = "chrom",start_col = "start",ref_col = "ref",tumor_allele_col = "alt")
+
+# glass_data_primary_tumor[which(glass_data_primary_tumor$start==4796757),]
+
+```
+
+Can cut down WGS into just the exome to make coverage the same for the whole dataset
+
+```{r Cut down WGS}
+# dndscv has a good data structure for what is in the exome
+
+library(dndscv)
+
+load("output_data/GLASS_data_maf_style_for_analysis_justPrimary.RData")
+
+
+GLASS_WGS <- glass_data_primary_tumor %>% 
+  mutate(sequencing_type = 
+           substr(x = aliquot_barcode, start = 21, stop = 23)) %>%
+  filter(sequencing_type == "WGS")
+
+GLASS_WXS <- glass_data_primary_tumor %>% 
+  mutate(sequencing_type = 
+           substr(x = aliquot_barcode, start = 21, stop = 23)) %>%
+  filter(sequencing_type == "WXS")
+
+
+
+GLASS_WGS$Gene_name <- NA
+GLASS_WGS$unsure_gene_name <- F
+
+MAF_ranges <- GenomicRanges::GRanges(seqnames = GLASS_WGS$chrom, ranges = IRanges::IRanges(start=GLASS_WGS$start,end = GLASS_WGS$start))
+
+
+# first, find overlaps
+
+# load RefCDS data and extract what is needed for annotations
+data(refcds_hg19,package="dndscv")
+
+# this loads both the RefCDS object and gr_genes, used for annotating SNV loci with gene name
+list_extract <- function(x){
+  return(list(gene_name=x$gene_name,
+              strand = x$strand,
+              intervals_cds = x$intervals_cds,
+              seq_cds=x$seq_cds,
+              seq_cds1up=x$seq_cds1up,
+              seq_cds1down=x$seq_cds1down))
+}
+RefCDS = as.array(lapply(RefCDS, list_extract))
+names(RefCDS) = sapply(RefCDS, function(x) x$gene_name)
+
+gene_name_overlaps <- GenomicRanges::findOverlaps(query = MAF_ranges,subject = gr_genes, type="any", select="all")
+
+# duplicate any substitutions that matched two genes
+overlaps <- as.matrix(gene_name_overlaps)
+
+matched_ol <- which(1:nrow(GLASS_WGS) %in% overlaps[,1])
+# unmatched_ol <- setdiff(1:nrow(MAF), matched_ol)
+
+MAF_matched <- GLASS_WGS[matched_ol,]
+
+MAF_ranges <- GenomicRanges::GRanges(seqnames = MAF_matched$chrom, ranges = IRanges::IRanges(start=MAF_matched$start,end = MAF_matched$start))
+
+gene_name_overlaps <- as.matrix(GenomicRanges::findOverlaps(query = MAF_ranges,subject = gr_genes, type="any", select="all"))
+
+MAF_matched <- MAF_matched[gene_name_overlaps[,1],] #expand the multi-matches
+MAF_matched$Gene_name <- gr_genes$names[gene_name_overlaps[,2]]# assign the multi-matches
+
+
+# MAF_unmatched <- MAF[unmatched_ol,]
+# 	glass_data_primary_tumor %>% 
+#   mutate(sequencing_type = 
+#            substr(x = aliquot_barcode, start = 21, stop = 23)) %>%
+#   filter(sequencing_type == "WXS") ->
+#   glass_data_primary_tumor
+
+
+MAF_matched_for_rbind <- MAF_matched %>%
+  select(colnames(GLASS_WXS))
+
+
+glass_data_primary_tumor <- rbind(GLASS_WXS,MAF_matched_for_rbind)
+
+
+save(glass_data_primary_tumor, file = "output_data/GLASS_data_maf_style_for_analysis_justPrimary.RData")
+
+```
+
+
+
+
+Checking to make sure we have one sample per tumor
+
+```{r GLASS one sample per tumor}
+library(tidyverse)
+
+load("output_data/GLASS_data_maf_style_for_analysis_justPrimary.RData")
+
+aliquots_per_sample <- glass_data_primary_tumor %>% 
+  mutate(sample_ID = substr(x = aliquot_barcode, start = 1, stop = 12)) %>%
+  mutate(aliquot_sub_barcode = substr(x = aliquot_barcode, start = 14, stop = nchar(aliquot_barcode))) %>%
+  group_by(sample_ID) %>%
+  summarize(number_of_samples = n_distinct(aliquot_sub_barcode)) %>%
+  arrange(desc(number_of_samples))
+
+# several aliquotes per some tumors. 
+# 
+# 
+# # just want WXS
+# do not need to do this anymore because we added the above step
+# glass_data_primary_tumor %>% 
+#   mutate(sequencing_type = 
+#            substr(x = aliquot_barcode, start = 21, stop = 23)) %>%
+#   filter(sequencing_type == "WXS") ->
+#   glass_data_primary_tumor
+
+aliquots_per_sample <- glass_data_primary_tumor %>% 
+  mutate(sample_ID = substr(x = aliquot_barcode, start = 1, stop = 12)) %>%
+  mutate(aliquot_sub_barcode = substr(x = aliquot_barcode, start = 14, stop = nchar(aliquot_barcode))) %>%
+  group_by(sample_ID) %>%
+  summarize(number_of_samples = n_distinct(aliquot_sub_barcode)) %>%
+  arrange(desc(number_of_samples))
+
+samples_with_greater_than_1_aliquot <- aliquots_per_sample[aliquots_per_sample$number_of_samples>1,]
+
+# head(glass_data_primary_tumor)
+
+
+glass_data_primary_tumor %>% 
+  mutate(sample_ID = substr(x = aliquot_barcode, start = 1, stop = 12)) %>%
+  mutate(aliquot_sub_barcode = substr(x = aliquot_barcode, start = 14, stop = nchar(aliquot_barcode))) -> 
+  glass_data_primary_tumor 
+glass_data_primary_tumor %>%
+  filter(sample_ID %in% samples_with_greater_than_1_aliquot$sample_ID) %>%
+  group_by(aliquot_barcode) %>%
+  summarize(count = n()) %>%
+  arrange(desc(aliquot_barcode))
+
+glass_data_split <- split(x = glass_data_primary_tumor, f = glass_data_primary_tumor$sample_ID)
+
+# length(glass_data_split)
+# 
+# nrow(glass_data_split[[1]])
+# length(unique(glass_data_split[[1]]$aliquot_sub_barcode))
+which(names(glass_data_split)=="TCGA-DU-5870")
+# save only unique variant information 
+# test <- unique(glass_data_split[[i]][,c("sample_ID","chrom","start","end","ref","alt")])
+# 4796757
+
+# test[which(test$start==4796757),]
+
+glass_data_sample_unique <- NULL
+for(i in 1:length(glass_data_split)){
+  
+  glass_data_sample_unique <- rbind( glass_data_sample_unique,unique(glass_data_split[[i]][,c("sample_ID","chrom","start","end","ref","alt")]))
+  
+  
+}
+
+
+# glass_data_sample_unique[which(glass_data_sample_unique$start==4796757),]
+
+
+save(glass_data_sample_unique, file = "output_data/glass_data_sample_unique.RData")
+
+
+
+
+```
+
+
+
+## TCGA gather and filter
+
+```{r import TCGA data}
+
+# input TCGA data from https://portal.gdc.cancer.gov
+
+# LGG 
+LGG_TCGA <- read.delim(file = "input_data/LGG_TCGA/gdc_download_20200215_150925.024858/1e0694ca-fcde-41d3-9ae3-47cfaf527f25/TCGA.LGG.mutect.1e0694ca-fcde-41d3-9ae3-47cfaf527f25.DR-10.0.somatic.maf",header = T,stringsAsFactors = F,skip = 5)
+
+LGG_TCGA$tumor_type <- "LGG"
+
+# GBM 
+GBM_TCGA <- read.delim(file = "input_data/GBM_TCGA/gdc_download_20200215_150852.200804/da904cd3-79d7-4ae3-b6c0-e7127998b3e6/TCGA.GBM.mutect.da904cd3-79d7-4ae3-b6c0-e7127998b3e6.DR-10.0.somatic.maf",header = T,stringsAsFactors = F,skip = 5)
+
+GBM_TCGA$tumor_type <- "GBM"
+
+TCGA_glioma_data <- rbind(LGG_TCGA[,c("Tumor_Sample_Barcode","Chromosome","Start_Position","End_Position","Reference_Allele","Tumor_Seq_Allele1","Tumor_Seq_Allele2","tumor_type")],GBM_TCGA[,c("Tumor_Sample_Barcode","Chromosome","Start_Position","End_Position","Reference_Allele","Tumor_Seq_Allele1","Tumor_Seq_Allele2","tumor_type")])
+
+
+TCGA_glioma_data$tumor_ID <- substr(TCGA_glioma_data$Tumor_Sample_Barcode,1,12)
+
+TCGA_glioma_data_tumor_type_df <- unique(TCGA_glioma_data[,c("tumor_ID","tumor_type")])
+
+
+# Store which tumors are LGG and GBM
+save(TCGA_glioma_data_tumor_type_df, file="output_data//TCGA_glioma_data_tumor_type_df.RData")
+
+
+# convert from hg38 --> hg19
+
+
+
+
+# need to download hg38ToHg19.over.chain from http://hgdownload.cse.ucsc.edu/goldenpath/hg38/liftOver/
+
+cesR_MAF <- cancereffectsizeR::CESAnalysis(genome="hg19")
+cesR_MAF <- cancereffectsizeR::load_maf(cesa = cesR_MAF, maf=TCGA_glioma_data,chain_file = "~/Downloads/hg38ToHg19.over.chain")
+TCGA_glioma_data_19 <- as.data.frame(cesR_MAF@maf)
+
+# TCGA_glioma_data <- cancereffectsizeR::hg_converter(chain = "~/Downloads/hg38ToHg19.over.chain",maf_to_convert = TCGA_glioma_data)
+
+# TCGA_glioma_data <- cancereffectsizeR::CESAnalysis(maf = TCGA_glioma_data)
+
+# find IDH+ tumors
+# TCGA_glioma_data <- cancereffectsizeR::calc_baseline_mutation_rates(cesa = TCGA_glioma_data,covariate_file = "lgg_pca")
+
+
+save(TCGA_glioma_data_19, file = "output_data/TCGA_glioma_data_19.RData")
+
+```
+
+
+
+
+
+```{r make a data structure with all tumor designations}
+load("output_data/TCGA_glioma_data_tumor_type_df.RData")
+
+
+
+
+# from glass synapse 
+
+GLASS_clin <- read.csv(file = "input_data/clinical_surgeries.csv")
+
+# just the primary tumors
+GLASS_clin <- GLASS_clin[grep(pattern = "-TP",x = GLASS_clin$sample_barcode),]
+
+
+GLASS_clin$lgg_gbm <- NA
+
+GLASS_clin[GLASS_clin$grade %in% c("II","III"),"lgg_gbm"] <- "LGG"
+GLASS_clin[GLASS_clin$histology %in% c("Glioblastoma"),"lgg_gbm"] <- "GBM"
+
+
+
+GLASS_clin <- unique(GLASS_clin[,c("case_barcode","lgg_gbm")])
+
+colnames(GLASS_clin) <- colnames(TCGA_glioma_data_tumor_type_df)
+
+tumor_type_designation <- unique(rbind(TCGA_glioma_data_tumor_type_df,GLASS_clin))
+
+save(tumor_type_designation, file = "output_data/tumor_type_designation.RData")
+```
+
+
+
+
+
+
+
+
+
+
+# Combine GLASS and TCGA data
+
+```{r combine GLASS and TCGA data}
+
+# load in TCGA data
+load("output_data/TCGA_glioma_data_19.RData")
+
+# load in GLASS data
+load("output_data/glass_data_sample_unique.RData")
+
+TCGA_glioma_data <- TCGA_glioma_data_19
+
+glass_data_sample_unique$Tumor_Seq_Allele1 <- glass_data_sample_unique$ref
+colnames(glass_data_sample_unique); colnames(TCGA_glioma_data)
+colnames(glass_data_sample_unique) <- c("Tumor_Sample_Barcode","Chromosome","Start_Position","End_Position","Reference_Allele","Tumor_Allele","Tumor_Seq_Allele1")
+
+TCGA_glioma_data$Tumor_Sample_Barcode <- cancereffectsizeR::consolidate_tcga_tumors_by_patient(tumor_sample_barcodes = TCGA_glioma_data$Unique_Patient_Identifier)
+
+
+# delete samples with NA reference 
+glass_data_sample_unique <- glass_data_sample_unique[-which(is.na(glass_data_sample_unique$Reference_Allele)),]
+
+# length(unique(glioma_all_data$Tumor_Sample_Barcode[grep(
+#   pattern = "GLSS",x = glioma_all_data$Tumor_Sample_Barcode)]))
+
+# 
+glioma_all_data <- rbind(glass_data_sample_unique[,c("Tumor_Sample_Barcode","Chromosome","Start_Position","Reference_Allele","Tumor_Allele")],
+                         TCGA_glioma_data[,c("Tumor_Sample_Barcode","Chromosome","Start_Position","Reference_Allele","Tumor_Allele")])
+
+# length(unique(glioma_all_data$Tumor_Sample_Barcode[grep(
+#   pattern = "GLSS",x = glioma_all_data$Tumor_Sample_Barcode)]))
+
+# removing duplicates of TCGA data that may have been in GLASS repo
+glioma_all_data <- unique(glioma_all_data[,c("Tumor_Sample_Barcode","Chromosome","Start_Position","Reference_Allele","Tumor_Allele")])
+# glioma_all_data[which(glioma_all_data$Start_Position==4796757),]
+
+save(glioma_all_data,file = "output_data/glioma_all_data.RData")
+```
+
+
+# Split data by comparisons 
+
+## Determine IDH status
+
+```{r split data by comparisons}
+
+load("output_data/glioma_all_data.RData")
+
+# first, split by IDH status. Use cancereffectsizeR to find IDH1 mutants.
+
+glioma_all_data_cesR <- cancereffectsizeR::CESAnalysis(genome = "hg19")
+glioma_all_data_cesR <- cancereffectsizeR::load_maf(cesa = glioma_all_data_cesR,maf = glioma_all_data)
+glioma_all_data_cesR <- cancereffectsizeR::gene_mutation_rates(glioma_all_data_cesR, covariate_file = "lgg_pca")
+glioma_all_data_cesR <-  cancereffectsizeR::annotate_variants(cesa = glioma_all_data_cesR)
+
+
+save(glioma_all_data_cesR,file = "output_data/glioma_all_CES_start.RData")
+
+# View(head(glioma_MAF))
+# 
+# glioma_MAF$Gene_name=="IDH1"
+# unique(glioma_MAF[glioma_MAF$Gene_name=="IDH1","coding_variant"])
+
+
+```
+
+
+
+## split by IDH substitution then sex
+
+
+
+```{r split by IDH1 and sex}
+
+load("output_data/glioma_all_CES_start.RData")
+glioma_all_data <- glioma_all_data_cesR
+
+# IDH mutants according to DOI 10.1007/s00401-016-1545-1
+
+glioma_MAF <- as.data.frame(glioma_all_data@maf)
+
+
+# length(unique(glioma_MAF$Unique_Patient_Identifier[grep(
+#   pattern = "GLSS",x = glioma_MAF$Unique_Patient_Identifier)]))
+
+
+
+# IDH1_132_variants <- unique(glioma_MAF[glioma_MAF$genes=="IDH1","coding_variant"])[grep(unique(glioma_MAF[glioma_MAF$Gene_name=="IDH1","coding_variant"]),pattern = "132")]
+
+
+
+# 95893	GLSS-MD-0093	2	209113112	C	A	SNV	
+# 95894	GLSS-MD-0093	2	209113112	C	T	SNV
+
+
+IDH1_132_variants <- glioma_MAF[grep(x = glioma_MAF$assoc_aa_mut,pattern = "IDH1_R132"),"assoc_aa_mut"]
+# 
+# length(unique(IDH1_132_variants$Unique_Patient_Identifier))
+# nrow(IDH1_132_variants)
+
+
+
+# IDH1_172_variants <- unique(glioma_MAF[glioma_MAF$genes=="IDH2","coding_variant"])[grep(unique(glioma_MAF[glioma_MAF$Gene_name=="IDH2","coding_variant"]),pattern = "172")]
+
+
+IDH2_172_variants <- glioma_MAF[grep(x = glioma_MAF$assoc_aa_mut,pattern = "IDH2_R172"),"assoc_aa_mut"] 
+
+tumor_classification_df <- data.frame(tumor_name = unique(glioma_MAF$Unique_Patient_Identifier), IDH_status="WILDTYPE", sex=NA,stringsAsFactors = F)
+
+for(i in 1:nrow(tumor_classification_df)){
+  if(
+    any(
+      glioma_MAF[
+        glioma_MAF$Unique_Patient_Identifier == tumor_classification_df[i,"tumor_name"],
+        "genes"] == "IDH1" &
+      glioma_MAF[
+        glioma_MAF$Unique_Patient_Identifier == tumor_classification_df[i,"tumor_name"],"assoc_aa_mut"] %in% IDH1_132_variants
+      
+    ) |
+    
+    any(
+      glioma_MAF[
+        glioma_MAF$Unique_Patient_Identifier == tumor_classification_df[i,"tumor_name"],
+        "genes"] == "IDH2" &
+      glioma_MAF[
+        glioma_MAF$Unique_Patient_Identifier == tumor_classification_df[i,"tumor_name"],"assoc_aa_mut"] %in% IDH2_172_variants
+      
+    )
+    
+    
+  ){
+    
+    tumor_classification_df[i,"IDH_status"] <- "MUTANT" 
+  }
+  
+  
+}
+
+
+# sex data from GLASS
+GLASS_clin_data <- read.delim(file = "input_data/clinical_cases.tsv",stringsAsFactors = F)
+
+# sex data from TCGA 
+
+library(TCGAretriever)
+LGG_clin <- get_clinical_data(case_id = "lgg_tcga_all")
+LGG_clin$patient_ID <- substr(x = LGG_clin$CASE_ID,start = 1,stop = 12)
+# head(LGG_clin)
+table(LGG_clin$SEX)
+
+gbm_clin <- get_clinical_data(case_id = "gbm_tcga_all")
+table(gbm_clin$SEX)
+gbm_clin$patient_ID <- substr(x = gbm_clin$CASE_ID,start = 1,stop = 12)
+
+TCGA_clinical <- rbind(LGG_clin[,c("patient_ID","SEX")],gbm_clin[,c("patient_ID","SEX")])
+
+for(i in 1:nrow(tumor_classification_df)){
+  if(tumor_classification_df[i,"tumor_name"] %in% TCGA_clinical[,"patient_ID"]){
+    tumor_classification_df[i,"sex"] <- toupper(TCGA_clinical[TCGA_clinical$patient_ID ==  tumor_classification_df[i,"tumor_name"],"SEX"])[1]
+  }
+  
+  if(tumor_classification_df[i,"tumor_name"] %in% GLASS_clin_data[,"case_barcode"]){
+    tumor_classification_df[i,"sex"] <- toupper(GLASS_clin_data[GLASS_clin_data$case_barcode ==  tumor_classification_df[i,"tumor_name"],"case_sex"])[1]
+  }
+  
+  
+}
+
+
+# GLASS_clin_data[which(GLASS_clin_data$case_barcode=="GLSS-DK-0009" ),]
+
+save(tumor_classification_df, file = "output_data/TCGA_and_GLASS_classification.RData")
+
+
+
+
+```
+
+```{r show the data distribution}
+load("output_data/glioma_all_data.RData")
+load("output_data/TCGA_and_GLASS_classification.RData")
+
+# distribution of data 
+tumor_classification_df %>%
+  group_by(IDH_status,sex) %>%
+  summarize(count=n())
+
+```
+
+
+
+```{r do the split}
+
+
+load("output_data/glioma_all_data.RData")
+load("output_data/TCGA_and_GLASS_classification.RData")
+
+
+
+IDH_mutant_glioma <- glioma_all_data[
+  glioma_all_data$Tumor_Sample_Barcode %in%
+    tumor_classification_df[
+      tumor_classification_df$IDH_status=="MUTANT","tumor_name"],] %>%
+  mutate(Tumor_Seq_Allele2 = Tumor_Allele)
+
+IDH_WT_glioma <- glioma_all_data[
+  glioma_all_data$Tumor_Sample_Barcode %in%
+    tumor_classification_df[
+      tumor_classification_df$IDH_status=="WILDTYPE","tumor_name"],] %>%
+  mutate(Tumor_Seq_Allele2 = Tumor_Allele)
+
+
+IDH_mutant_M_glioma <- IDH_mutant_glioma[
+  IDH_mutant_glioma$Tumor_Sample_Barcode %in% 
+    tumor_classification_df[
+      tumor_classification_df$sex=="MALE","tumor_name"],] %>%
+  mutate(Tumor_Seq_Allele2 = Tumor_Allele)
+
+IDH_mutant_F_glioma <- IDH_mutant_glioma[
+  IDH_mutant_glioma$Tumor_Sample_Barcode %in% 
+    tumor_classification_df[
+      tumor_classification_df$sex=="FEMALE","tumor_name"],] %>%
+  mutate(Tumor_Seq_Allele2 = Tumor_Allele)
+
+
+
+IDH_WT_M_glioma <- IDH_WT_glioma[
+  IDH_WT_glioma$Tumor_Sample_Barcode %in% 
+    tumor_classification_df[
+      tumor_classification_df$sex=="MALE","tumor_name"],]
+
+IDH_WT_F_glioma <- IDH_WT_glioma[
+  IDH_WT_glioma$Tumor_Sample_Barcode %in% 
+    tumor_classification_df[
+      tumor_classification_df$sex=="FEMALE","tumor_name"],]
+
+
+save(IDH_WT_F_glioma,file = "output_data/IDH_WT_F_glioma.RData")
+save(IDH_WT_M_glioma,file = "output_data/IDH_WT_M_glioma.RData")
+save(IDH_mutant_F_glioma,file = "output_data/IDH_mutant_F_glioma.RData")
+save(IDH_mutant_M_glioma,file = "output_data/IDH_mutant_M_glioma.RData")
+
+
+```
