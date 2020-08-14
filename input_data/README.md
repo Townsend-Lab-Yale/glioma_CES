@@ -1,0 +1,1 @@
+This folder should be populated with raw (freely available) data used in the analysis. See main directory README and initial analyses script for more information.

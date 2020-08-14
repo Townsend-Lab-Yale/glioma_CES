@@ -1,0 +1,556 @@
+---
+title: "Glioma subset results"
+author: "Vincent L. Cannataro"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+
+```{r plot selection data}
+load("output_data/combined_selection_results.RData")
+# 
+# class(selection_data_main)
+# 
+# head(selection_data_main)
+# table(selection_data_main$tumors_with_variant)
+
+
+selection_data_main_df <- selection_data_main
+#
+source("R/label_nudge.R")
+library(ggplot2)
+unique(selection_data_main_df$tumor_type)
+
+#
+recurrent.data <- selection_data_main_df
+
+recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)] <-
+  paste(recurrent.data$Gene[grep(pattern = ">",x = recurrent.data$variant)],
+        recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)])
+
+
+
+
+
+
+genes.to.remove  <- "TTN" 
+
+
+recurrent.data <- recurrent.data %>%
+  filter(!Gene %in% genes.to.remove)
+
+
+recurrent.data$gamma_epistasis <- log10(recurrent.data$selection_intensity)
+
+recurrent.data$tumor_type <- factor(recurrent.data$tumor_type)
+#
+to.add <- recurrent.data[which(recurrent.data$tumor_type==unique(recurrent.data$tumor_type)[1]),]
+to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:50,]
+
+top.hits <- to.add
+for(i in 2:length(unique(recurrent.data$tumor_type))){
+  to.add <- recurrent.data[which(recurrent.data$tumor_type==unique(recurrent.data$tumor_type)[i]),]
+  if(nrow(to.add)<50){
+    print(paste("Less than 50!",unique(recurrent.data$tumor_type)[i]))
+    to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:nrow(to.add),]
+    top.hits <- rbind(top.hits,to.add)
+  }else{
+    to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:50,]
+    top.hits <- rbind(top.hits,to.add)
+  }
+}
+
+
+
+data.to.push <- data.push.function(data.to.push = top.hits,x.min = 3.2,x.max = 8,touching.distance = 0.08,pushing.distance = 0.03/30,x.data = 'gamma_epistasis',cat.data = 'tumor_type',max.iter = 1e5,gamma.min = 3.2,freq.data = 'tumors_with_variant')
+
+
+data.to.push$Gene_freq <- NA
+for(i in 1:nrow(data.to.push)){
+  data.to.push$Gene_freq[i] <- table(data.to.push$Gene)[data.to.push$Gene[i]]
+}
+
+
+
+data.to.push$Qval <- as.factor((data.to.push$dndscv_q<0.05)*1)
+data.to.push$Qval_col <- "Q > 0.05"
+data.to.push$Qval_col[which(data.to.push$Qval==1)] <- "Q <= 0.05"
+
+
+# which labels need to be lifted higher than others?
+recurrent.data$label_lifted <- F
+# recurrent.data$label_lifted[which((recurrent.data$tumor_type == "SKCM" & recurrent.data$Name == "BRAF V600E"))] <- T
+data.to.push$label_lifted <- F
+# data.to.push$label_lifted[which((data.to.push$tumor_type == "SKCM" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "SKCMM" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "THCA" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "LGG" & data.to.push$Name == "IDH1 R132H") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12R") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12V") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12D"))] <- T
+# 
+
+
+min_gamma <- 3.2
+
+text_size <- 4
+theme_size = (14/5) * text_size
+
+
+lolli <- ggplot(data=subset(recurrent.data,gamma_epistasis>min_gamma), aes(y=gamma_epistasis,x=tumor_type))
+lolli <- lolli + geom_point(shape="—")
+
+lolli <- lolli + geom_text(data=subset(data.to.push,gamma_epistasis>min_gamma),aes(y=new_x,x=ifelse(label_lifted==T, as.numeric(tumor_type)+0.2,as.numeric(tumor_type)+0.15),label=Name),angle=0,size=text_size,hjust = 0,fontface = 'bold')
+
+lolli <- lolli + geom_text(data=subset(data.to.push,Gene_freq>=2 & gamma_epistasis>min_gamma),aes(y=new_x,x=ifelse(label_lifted==T, as.numeric(tumor_type)+0.2,as.numeric(tumor_type)+0.15),label=Gene,color=Gene),angle=0,size=text_size,hjust = 0,fontface = 'bold') + scale_colour_discrete(guide = FALSE)
+
+pvals <- list(expression(italic("P") <= 0.05), expression(italic("P") > 0.05))
+qvals <- list(expression("Q" <= 0.05), expression("Q" > 0.05))
+
+lolli <- lolli + geom_point(data=subset(data.to.push, gamma_epistasis>min_gamma),aes(y=new_x,x=as.numeric(tumor_type)+0.1,size=tumors_with_variant, fill=Qval_col),shape=21,alpha=0.8)+ scale_fill_manual(labels = qvals,values = c("red","black"),breaks=c("Q <= 0.05","Q > 0.05"))
+
+lolli <- lolli + geom_segment(data=subset(data.to.push, gamma_epistasis>min_gamma),aes(y=gamma_epistasis,x=as.numeric(tumor_type)+0.02,yend=new_x,xend=as.numeric(tumor_type)+0.1),size=0.2,alpha=0.8)
+
+lolli <- lolli + theme_bw() +
+  coord_cartesian(xlim=c(1,length(unique(recurrent.data$tumor_type))+1),ylim=c(3,max(recurrent.data$gamma_epistasis)+0.2)) +
+  scale_size_continuous(breaks = c(0.01,0.05,0.1,0.2,0.4,0.6)) +
+  # labs(size="Prevalence",color="Gene", fill=expression(paste(italic("P")," value"))) +
+  labs(size="Prevalence",color="Gene", fill=expression(paste("Q"," value"))) +
+  guides(size = guide_legend(reverse = TRUE)) +
+  labs(x="Tumor type",y="Selection intensity") +
+  scale_y_continuous(breaks=1:7, labels=expression(10^1,10^2,10^3, 10^4, 10^5,10^6,10^7), expand = c(0,0)) +#+ scale_y_discrete(labels=as.expression(unlist(sapply(levels(recurrent.data$tumor_type), as.name)))) +
+  scale_x_discrete(labels=parse(text=levels(recurrent.data$tumor_type)),expand = c(0,.2)) +
+  theme(panel.border = element_blank()) +
+  theme(plot.margin = unit(c(1,1,1,1),units="cm")) +
+  theme(axis.title.x = element_text(margin = margin(t = 0, r = 1.5, b = 0, l = 0),size=theme_size),
+        axis.text.x = element_text(size=theme_size),axis.text.y = element_text(size=theme_size),axis.title.y=element_text(size=theme_size)) +
+  theme(legend.position = c(0.95,0.75))
+
+# ggsave(filename = "figures/glioma_selection_Jul2020.pdf",plot = lolli,width = 30,height = 20, limitsize=F)
+ggsave(filename = "figures/fig_1_glioma_CES.png",plot = lolli,width = 15,height = 10)
+
+# ggsave(filename = "figures/full_selection_data_dndscv_big_cluster.png",plot = lolli,width = 48,height = 36)
+# ggsave(filename = "figures/full_selection_data_dndscv_big_cluster.pdf",plot = lolli,width = 48,height = 36, device = cairo_pdf)
+
+
+
+
+# selection_data_main_df[which(selection_data_main_df$tumor_type=="STAD" & selection_data_main_df$V5=="KRAS"),]
+
+
+# which(selection_data_main$Gene=="SETD2")
+```
+
+
+```{r NRSI results}
+
+load("../combined_per_tumor_proportion_scaled_selection.RData")
+
+
+
+source("../R/NRSI_plotter_2.R")
+
+plot_list <- list()
+for(tumortype_ind in 1:length(unique(per_tumor_data_main$tumor_type))){
+  
+  this_tumor_type <- unique(per_tumor_data_main$tumor_type)[tumortype_ind]
+  
+  # load(paste0("../local_work/NRSI_data/",this_tumor_type,".RData"))
+  
+  test_plot <- population_scaled_selection_melter_and_plotter(
+    NRSI_input = per_tumor_data_main[per_tumor_data_main$tumor_type==this_tumor_type,],
+    top_variant_number = 10,
+    tumor_type = this_tumor_type,
+    plot_text_size = 11,
+    legend_rows = 6,
+    top_sigs_to_plot = 67,
+    sig_text_vjust = 0.5,
+    sig_text_hjust = 0,
+    pct_text_vjust = 0,
+    pct_text_hjust = 0,
+    pct_text_angle = 0,
+    sig_text_angle = 90,
+    # given_new_df = test_plot$new_NRSI_df,
+    y_boost = 15)
+  
+  ggsave(plot = test_plot$NRSI_plot,filename = paste0("../output_data/Aug2019_and_beyond/",this_tumor_type,"_Jul2020.pdf"),height = 10,width = 12)
+  ggsave(plot = test_plot$NRSI_plot,filename = paste0("../output_data/Aug2019_and_beyond/",this_tumor_type,"_Jul2020.png"),height = 10,width = 12)
+  
+  # save(test_plot,file = paste0("../local_work/NRSI_data/",this_tumor_type,".RData")) # already did this
+  
+  plot_list[[tumortype_ind]] <- test_plot$NRSI_plot
+}
+
+
+
+```
+
+
+```{r significantly mutated genes}
+
+selection_data_main  %>%
+  filter(dndscv_q < 0.1) %>%
+  select(Gene, dndscv_q, tumor_type) %>%
+  unique() %>% 
+  ggplot(aes(y=dndscv_q, x=tumor_type)) + 
+  geom_point() + 
+  ggrepel::geom_label_repel(aes(label=Gene),box.padding = .38) + 
+  theme_bw() + 
+  labs(y="dndscv Q value", 
+       x="Tumor Type",
+       title = "Significantly mutated genes", 
+       subtitle = "Only showing Q values < 0.1") -> 
+  significantly_mutated_genes
+
+ggsave(plot = significantly_mutated_genes,
+       filename = "../output_data/Aug2019_and_beyond/significantly_mutated_genes.png",height = 4,width = 6)
+
+
+```
+
+```{r}
+
+selection_data_main_clean <- selection_data_main %>%
+  filter(dndscv_q <= 0.1) %>% 
+  mutate(m_f = case_when(tumor_type %in% c("IDH_mutant_F","IDH_WT_F") ~ "Female",
+                         tumor_type %in% c("IDH_mutant_M","IDH_WT_M") ~ "Male")) %>%
+  mutate(idh_status = case_when(tumor_type %in% c("IDH_mutant_F","IDH_mutant_M") ~ "IDH_mutant",
+                                tumor_type %in% c("IDH_WT_F","IDH_WT_M") ~ "IDH_WT")) %>%
+  dplyr::select(m_f,idh_status,Gene,Name,variant_type,selection_intensity) %>%
+  pivot_wider(names_from = c(m_f), values_from = selection_intensity) %>%
+  mutate(Male = case_when(is.na(Male) ~ 0,
+                          TRUE ~ Male),
+         Female = case_when(is.na(Female) ~ 0,
+                            TRUE ~ Female))
+
+
+selection_scatter_m_f <- ggplot(selection_data_main_clean) + 
+  geom_point(aes(x=Female,y=Male,color=Gene,shape=variant_type,label=Name)) + 
+  facet_wrap(~idh_status,scales = "free") + 
+  scale_y_log10() + scale_x_log10() + 
+  theme_bw() + 
+  guides(col = guide_legend(ncol = 3))
+
+ggsave(plot = selection_scatter_m_f, filename = "../output_data/Aug2019_and_beyond/selection_scatter_m_f.png",height = 5,width = 12)
+
+
+selection_scatter_m_f_html <- plotly::ggplotly(ggplot(selection_data_main_clean) + 
+                                                 geom_point(aes(x=Female,y=Male,color=Gene,shape=variant_type,label=Name)) + 
+                                                 facet_wrap(~idh_status,scales = "free") + 
+                                                 # scale_y_log10() + scale_x_log10() + 
+                                                 theme_bw() + labs(x="Male",y="Female",title="Cance effect size") + 
+                                                 guides(col = guide_legend(ncol = 3)))
+
+saveWidgetFix <- function (widget,file,...) {
+  library(htmlwidgets)
+  ## A wrapper to saveWidget which compensates for arguable BUG in
+  ## saveWidget which requires `file` to be in current working
+  ## directory.
+  wd<-getwd()
+  on.exit(setwd(wd))
+  outDir<-dirname(file)
+  file<-basename(file)
+  setwd(outDir);
+  saveWidget(widget,file=file,...)
+}
+
+saveWidgetFix(selection_scatter_m_f_html, "../output_data/Aug2019_and_beyond/selection_scatter_m_f.html")
+
+
+# few variants from snv in non-significant genes
+selection_data_main_clean %>% 
+  filter(variant_type == "snv")
+
+
+
+
+
+```
+
+
+```{r effect by gene by sex}
+
+
+selection_data_main_clean_wNA <- selection_data_main %>%
+  filter(dndscv_q <= 0.1) %>% 
+  mutate(m_f = case_when(tumor_type %in% c("IDH_mutant_F","IDH_WT_F") ~ "Female",
+                         tumor_type %in% c("IDH_mutant_M","IDH_WT_M") ~ "Male")) %>%
+  mutate(idh_status = case_when(tumor_type %in% c("IDH_mutant_F","IDH_mutant_M") ~ "IDH_mutant",
+                                tumor_type %in% c("IDH_WT_F","IDH_WT_M") ~ "IDH_WT")) %>%
+  dplyr::select(m_f,idh_status,Gene,Name,variant_type,selection_intensity) %>%
+  pivot_wider(names_from = c(m_f), values_from = selection_intensity) #%>%
+# mutate(Male = case_when(is.na(Male) ~ 0,
+#                         TRUE ~ Male),
+#        Female = case_when(is.na(Female) ~ 0,
+#                         TRUE ~ Female))
+
+selection_data_main_clean_wNA_wide <-  selection_data_main %>%
+  filter(dndscv_q <= 0.1) %>% 
+  mutate(m_f = case_when(tumor_type %in% c("IDH_mutant_F","IDH_WT_F") ~ "Female",
+                         tumor_type %in% c("IDH_mutant_M","IDH_WT_M") ~ "Male")) %>%
+  mutate(idh_status = case_when(tumor_type %in% c("IDH_mutant_F","IDH_mutant_M") ~ "IDH_mutant",
+                                tumor_type %in% c("IDH_WT_F","IDH_WT_M") ~ "IDH_WT")) %>%
+  dplyr::select(m_f,idh_status,Gene,Name,variant_type,selection_intensity)
+
+library(ggrepel)
+effect_size_by_sex_by_gene <- ggplot(selection_data_main_clean_wNA_wide,
+                                     aes(x=m_f,y=selection_intensity,label=Name)) + 
+  geom_point(aes(shape=variant_type)) +
+  geom_text(data = subset(selection_data_main_clean_wNA_wide,m_f=="Female"),size=1,
+            hjust=1,check_overlap = F,nudge_x = -0.05) +
+  geom_text(data = subset(selection_data_main_clean_wNA_wide,m_f=="Male"),size=1,
+            hjust=0,check_overlap = F,nudge_x = 0.05) +
+  geom_segment(data=selection_data_main_clean_wNA,
+               aes(x=1,xend=2,y=Female,yend=Male)) + 
+  facet_grid(vars(Gene),vars(idh_status),scales = "free") + 
+  scale_y_log10() + 
+  theme_bw() 
+
+ggsave(plot = effect_size_by_sex_by_gene,filename = "../output_data/Aug2019_and_beyond/effect_size_by_sex_by_gene.png",
+       height=20,width = 5)
+
+write.csv(selection_data_main_clean_wNA_wide,row.names = F,quote = F,file = "../output_data/Aug2019_and_beyond/effect_size_by_sex_by_gene.csv")
+
+```
+
+
+
+
+```{r how many tumors had haloalkane signature and what weight in those tumors}
+load("../IDH_WT_M_signature_weights_all_tumors.RData")
+IDH_WT_M_sigs <- signature_weights_all_tumors
+IDH_WT_M_sigs$tumor_type <- "IDH_WT_M"
+
+IDH_WT_F_sigs <- get(load("../IDH_WT_F_signature_weights_all_tumors.RData"))
+IDH_WT_F_sigs$tumor_type <- "IDH_WT_F"
+
+IDH_mutant_F_sigs <- get(load("../IDH_mutant_F_signature_weights_all_tumors.RData"))
+IDH_mutant_F_sigs$tumor_type <- "IDH_mutant_F"
+
+IDH_mutant_M_sigs <- get(load("../IDH_mutant_M_signature_weights_all_tumors.RData"))
+IDH_mutant_M_sigs$tumor_type <- "IDH_mutant_M"
+
+
+signature_weights <- rbind(IDH_mutant_F_sigs,IDH_mutant_M_sigs,IDH_WT_F_sigs,IDH_WT_M_sigs)
+
+halo_sigs <- signature_weights %>% 
+  filter(SBS42 > 0,
+         # group_avg_blended==F
+  ) %>% 
+  dplyr::select(Unique_Patient_Identifier,total_snvs,sig_extraction_snvs,group_avg_blended,SBS42,tumor_type) %>%
+  mutate(m_f = case_when(tumor_type %in% c("IDH_WT_M","IDH_mutant_M") ~ "Male",
+                         tumor_type %in% c("IDH_WT_F","IDH_mutant_F") ~ "Female")) %>%
+  arrange(desc(SBS42))
+
+halo_sigs$Unique_Patient_Identifier <- factor(halo_sigs$Unique_Patient_Identifier,
+                                              levels=halo_sigs$Unique_Patient_Identifier)
+
+ggplot(halo_sigs) + 
+  geom_bar(aes(x=Unique_Patient_Identifier,y=SBS42,fill=m_f),stat="identity") + 
+  theme_bw() + 
+  labs(x="Tumor",y="Percent of total \nmutational weight contributed by SBS42 \n(haloalkanes)") +
+  theme(axis.text.x = element_text(angle=90,vjust=0.5,hjust=1)) ->
+  halo_sigs_plot
+
+ggsave(filename = "../output_data/Aug2019_and_beyond/halo_sigs_plot.png",plot = halo_sigs_plot,width = 18,height = 4)
+
+
+
+```
+
+
+```{r proportion of recurrent variants that are noncoding}
+
+selection_data_main %>% 
+  group_by(tumor_type,variant_type) %>%
+  summarize(distribution_of_variant_type = table(variant_type))
+
+
+ggplot(selection_data_main) + 
+  geom_jitter(aes(x=selection_intensity,y=tumor_type,fill=variant_type),
+              alpha=0.8,shape=21,width = 0,height = .3) + 
+  scale_x_log10() + 
+  theme_bw() + 
+  scale_fill_discrete(name = "Variant type") + 
+  labs(y="Tumor type", x="Cancer effect size",
+       title="Cancer effect size of all recurrent variants in glioma",
+       subtitle = "aac = amino acid coding, snv are non-coding single nucleotide variants") -> 
+  selection_v_variant_type
+
+ggsave(filename = "../output_data/Aug2019_and_beyond/selection_v_variant_type.png",
+       plot = selection_v_variant_type,height = 3,width = 8)
+
+
+```
+
+
+```{r plot selection data just aac}
+load("../combined_selection_results.RData")
+
+class(selection_data_main)
+
+head(selection_data_main)
+table(selection_data_main$tumors_with_variant)
+
+
+selection_data_main_df <- selection_data_main
+#
+source("../R/label_nudge.R")
+library(ggplot2)
+unique(selection_data_main_df$tumor_type)
+
+
+
+
+
+#
+recurrent.data <- selection_data_main_df %>%
+  filter(variant_type == "aac")
+
+recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)] <-
+  paste(recurrent.data$Gene[grep(pattern = ">",x = recurrent.data$variant)],
+        recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)])
+
+
+
+
+
+
+genes.to.remove  <- "TTN" 
+
+# recurrent.data_var_split <- strsplit(x = recurrent.data$variant,split="_")
+# recurrent_data_fill <- rep(NA,nrow(recurrent.data))
+# 
+# coding_ind <- which(sapply(X = recurrent.data_var_split,FUN = length) == 3)
+# 
+# recurrent_data_fill[coding_ind] <- 
+#   sapply(recurrent.data_var_split[coding_ind], function(x) paste(x[1:2],collapse = " "))
+# 
+# recurrent.data$Name <- recurrent.data$variant
+# recurrent.data$Name[coding_ind] <- recurrent_data_fill[coding_ind]
+# 
+# recurrent.data$Gene <- NA
+# 
+# recurrent.data$Gene[coding_ind] <- sapply(recurrent.data_var_split[coding_ind], function(x) paste(x[1]))
+# 
+
+recurrent.data <- recurrent.data %>%
+  filter(!Gene %in% genes.to.remove)
+
+
+# colnames(recurrent.data)[which(colnames(recurrent.data)=="gene")] <- "Gene"
+# recurrent.data$Name <- recurrent.data$variant
+
+recurrent.data$gamma_epistasis <- log10(recurrent.data$selection_intensity)
+
+recurrent.data$tumor_type <- factor(recurrent.data$tumor_type)
+#
+to.add <- recurrent.data[which(recurrent.data$tumor_type==unique(recurrent.data$tumor_type)[1]),]
+to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:50,]
+
+top.hits <- to.add
+for(i in 2:length(unique(recurrent.data$tumor_type))){
+  to.add <- recurrent.data[which(recurrent.data$tumor_type==unique(recurrent.data$tumor_type)[i]),]
+  if(nrow(to.add)<50){
+    print(paste("Less than 50!",unique(recurrent.data$tumor_type)[i]))
+    to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:nrow(to.add),]
+    top.hits <- rbind(top.hits,to.add)
+  }else{
+    to.add <- to.add[order(to.add$gamma_epistasis,decreasing = T),][1:50,]
+    top.hits <- rbind(top.hits,to.add)
+  }
+}
+
+
+
+data.to.push <- data.push.function(data.to.push = top.hits,x.min = 3.2,x.max = 8,touching.distance = 0.08,pushing.distance = 0.03/30,x.data = 'gamma_epistasis',cat.data = 'tumor_type',max.iter = 1e5,gamma.min = 3.2,freq.data = 'tumors_with_variant')
+
+
+data.to.push$Gene_freq <- NA
+for(i in 1:nrow(data.to.push)){
+  data.to.push$Gene_freq[i] <- table(data.to.push$Gene)[data.to.push$Gene[i]]
+}
+
+
+# data.to.push$Pval <- as.factor((data.to.push$dndscv_p<0.05)*1)
+# data.to.push$Pval_col <- "P > 0.05"
+# data.to.push$Pval_col[which(data.to.push$Pval==1)] <- "P <= 0.05"
+
+data.to.push$Qval <- as.factor((data.to.push$dndscv_q<0.05)*1)
+data.to.push$Qval_col <- "Q > 0.05"
+data.to.push$Qval_col[which(data.to.push$Qval==1)] <- "Q <= 0.05"
+
+
+# which labels need to be lifted higher than others?
+recurrent.data$label_lifted <- F
+# recurrent.data$label_lifted[which((recurrent.data$tumor_type == "SKCM" & recurrent.data$Name == "BRAF V600E"))] <- T
+data.to.push$label_lifted <- F
+# data.to.push$label_lifted[which((data.to.push$tumor_type == "SKCM" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "SKCMM" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "THCA" & data.to.push$Name == "BRAF V600E") |
+#                                   (data.to.push$tumor_type == "LGG" & data.to.push$Name == "IDH1 R132H") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12R") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12V") |
+#                                   (data.to.push$tumor_type == "PAAD" & data.to.push$Name == "KRAS G12D"))] <- T
+# 
+# 
+# 
+# 
+# 
+# 
+# Large file for poster -----
+min_gamma <- 3.2
+
+text_size <- 4
+theme_size = (14/5) * text_size
+# recurrent.data$tumors_with_variant <- recurrent.data$tumors_with_variant
+
+lolli <- ggplot(data=subset(recurrent.data,gamma_epistasis>min_gamma), aes(y=gamma_epistasis,x=tumor_type))
+lolli <- lolli + geom_point(shape="—")
+
+lolli <- lolli + geom_text(data=subset(data.to.push,gamma_epistasis>min_gamma),aes(y=new_x,x=ifelse(label_lifted==T, as.numeric(tumor_type)+0.2,as.numeric(tumor_type)+0.15),label=Name),angle=0,size=text_size,hjust = 0,fontface = 'bold')
+
+lolli <- lolli + geom_text(data=subset(data.to.push,Gene_freq>=2 & gamma_epistasis>min_gamma),aes(y=new_x,x=ifelse(label_lifted==T, as.numeric(tumor_type)+0.2,as.numeric(tumor_type)+0.15),label=Gene,color=Gene),angle=0,size=text_size,hjust = 0,fontface = 'bold') + scale_colour_discrete(guide = FALSE)
+
+pvals <- list(expression(italic("P") <= 0.05), expression(italic("P") > 0.05))
+qvals <- list(expression("Q" <= 0.05), expression("Q" > 0.05))
+
+lolli <- lolli + geom_point(data=subset(data.to.push, gamma_epistasis>min_gamma),aes(y=new_x,x=as.numeric(tumor_type)+0.1,size=tumors_with_variant, fill=Qval_col),shape=21,alpha=0.8)+ scale_fill_manual(labels = qvals,values = c("red","black"),breaks=c("Q <= 0.05","Q > 0.05"))
+
+lolli <- lolli + geom_segment(data=subset(data.to.push, gamma_epistasis>min_gamma),aes(y=gamma_epistasis,x=as.numeric(tumor_type)+0.02,yend=new_x,xend=as.numeric(tumor_type)+0.1),size=0.2,alpha=0.8)
+
+lolli <- lolli + theme_bw() +
+  coord_cartesian(xlim=c(1,length(unique(recurrent.data$tumor_type))+1),ylim=c(3,max(recurrent.data$gamma_epistasis)+0.2)) +
+  scale_size_continuous(breaks = c(0.01,0.05,0.1,0.2,0.4,0.6)) +
+  # labs(size="Prevalence",color="Gene", fill=expression(paste(italic("P")," value"))) +
+  labs(size="Prevalence",color="Gene", fill=expression(paste("Q"," value"))) +
+  guides(size = guide_legend(reverse = TRUE)) +
+  labs(x="Tumor type",y="Selection intensity") +
+  scale_y_continuous(breaks=1:7, labels=expression(10^1,10^2,10^3, 10^4, 10^5,10^6,10^7), expand = c(0,0)) +#+ scale_y_discrete(labels=as.expression(unlist(sapply(levels(recurrent.data$tumor_type), as.name)))) +
+  scale_x_discrete(labels=parse(text=levels(recurrent.data$tumor_type)),expand = c(0,.2)) +
+  theme(panel.border = element_blank()) +
+  theme(plot.margin = unit(c(1,1,1,1),units="cm")) +
+  theme(axis.title.x = element_text(margin = margin(t = 0, r = 1.5, b = 0, l = 0),size=theme_size),
+        axis.text.x = element_text(size=theme_size),axis.text.y = element_text(size=theme_size),axis.title.y=element_text(size=theme_size)) +
+  theme(legend.position = c(0.95,0.75))
+
+ggsave(filename = "../output_data/Aug2019_and_beyond/glioma_selection_Aug2020_justaac.pdf",plot = lolli,width = 30,height = 20, limitsize=F)
+ggsave(filename = "../output_data/Aug2019_and_beyond/glioma_selection_Aug2020_justaac.png",plot = lolli,width = 15,height = 10)
+
+# ggsave(filename = "figures/full_selection_data_dndscv_big_cluster.png",plot = lolli,width = 48,height = 36)
+# ggsave(filename = "figures/full_selection_data_dndscv_big_cluster.pdf",plot = lolli,width = 48,height = 36, device = cairo_pdf)
+
+
+
+
+# selection_data_main_df[which(selection_data_main_df$tumor_type=="STAD" & selection_data_main_df$V5=="KRAS"),]
+
+
+# which(selection_data_main$Gene=="SETD2")
+```
