@@ -177,7 +177,7 @@ MAF_matched$Gene_name <- gr_genes$names[gene_name_overlaps[,2]]# assign the mult
 
 
 MAF_matched_for_rbind <- MAF_matched %>%
-  select(colnames(GLASS_WXS))
+  dplyr::select(colnames(GLASS_WXS))
 
 
 glass_data_primary_tumor <- rbind(GLASS_WXS,MAF_matched_for_rbind)
