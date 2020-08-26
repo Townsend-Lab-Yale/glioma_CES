@@ -43,17 +43,6 @@ recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)] <-
         recurrent.data$Name[grep(pattern = ">",x = recurrent.data$variant)])
 
 
-
-
-
-
-genes.to.remove  <- "TTN" 
-
-
-recurrent.data <- recurrent.data %>%
-  filter(!Gene %in% genes.to.remove)
-
-
 recurrent.data$gamma_epistasis <- log10(recurrent.data$selection_intensity)
 
 recurrent.data$tumor_type <- factor(recurrent.data$tumor_type)
@@ -344,7 +333,7 @@ for(tumortype_ind in 1:length(unique(per_tumor_data_main$tumor_type))){
 
 
 
-all_nrsi <- cowplot::plot_grid(plotlist = plot_list,nrow = 2,align = "hv")
+all_nrsi <- cowplot::plot_grid(plotlist = plot_list,nrow = 2,align = "hv",labels = "AUTO")
 
 cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.png",base_height = 6,base_width = 10)
 
@@ -564,6 +553,37 @@ IDH_mutant_M_sigs$tumor_type <- "IDH_mutant_M"
 
 signature_weights <- rbind(IDH_mutant_F_sigs,IDH_mutant_M_sigs,IDH_WT_F_sigs,IDH_WT_M_sigs)
 
+
+sig_w_for_stats <- signature_weights %>%
+  # filter(group_avg_blended == F) %>%
+  filter(sig_extraction_snvs > 35) %>%
+  dplyr::select(Unique_Patient_Identifier,total_snvs,sig_extraction_snvs,group_avg_blended,SBS42,tumor_type) %>%
+  mutate(m_f = case_when(tumor_type %in% c("IDH_WT_M","IDH_mutant_M") ~ "Male",
+                         tumor_type %in% c("IDH_WT_F","IDH_mutant_F") ~ "Female"))
+
+wilcox.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="less")
+wilcox.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="two.sided")
+t.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="less")
+
+ggplot(sig_w_for_stats, aes(x=sig_extraction_snvs, y=SBS42,fill=m_f)) +
+  # geom_violin() +
+  geom_jitter(shape=21,color="black",alpha=0.5,height = .01) +
+  geom_vline(xintercept = 50,color="red") + 
+  theme_classic() +
+  scale_x_log10() +
+  labs(x="SNVs in the tumor",y="Occupational exposure to haloalkanes (42) \nsignature weight")
+
+# 
+# halo_sigs_plot_stats <- ggplot(sig_w_for_stats, aes(x=m_f, y=SBS42)) +
+#   geom_violin() +
+#   geom_jitter(height = 0,width = 0.2,alpha=0.5) +
+#   theme_classic() +
+#   labs(x="Tumor type",y="Occupational exposure to haloalkanes (42) \nsignature weight")
+
+```
+
+```{r halo sigs continued}
+
 halo_sigs <- signature_weights %>% 
   filter(SBS42 > 0,
          # group_avg_blended==F
@@ -595,17 +615,17 @@ ggsave(filename = "figures/fig_5_halo_sigs_plot.png",plot = halo_sigs_plot,width
 
 halo_sigs_w_zero <- signature_weights %>% 
   # filter(SBS42 > 0,
-         # group_avg_blended==F) %>% 
+  # group_avg_blended==F) %>% 
   dplyr::select(Unique_Patient_Identifier,total_snvs,sig_extraction_snvs,group_avg_blended,SBS42,tumor_type) %>%
   mutate(m_f = case_when(tumor_type %in% c("IDH_WT_M","IDH_mutant_M") ~ "Male",
                          tumor_type %in% c("IDH_WT_F","IDH_mutant_F") ~ "Female")) %>%
   arrange(desc(SBS42))
 
 halo_sigs_w_zero$tumor_type <- forcats::fct_recode(halo_sigs_w_zero$tumor_type,
-                                            `IDH mutant, Female` = "IDH_mutant_F",
-                                            `IDH mutant, Male` = "IDH_mutant_M",
-                                            `IDH wildtype, Female` = "IDH_WT_F",
-                                            `IDH wildtype, Male` = "IDH_WT_M"
+                                                   `IDH mutant, Female` = "IDH_mutant_F",
+                                                   `IDH mutant, Male` = "IDH_mutant_M",
+                                                   `IDH wildtype, Female` = "IDH_WT_F",
+                                                   `IDH wildtype, Male` = "IDH_WT_M"
 )
 
 
