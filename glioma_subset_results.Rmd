@@ -654,7 +654,7 @@ cowplot::save_plot(plot = effect_size_by_sex_by_gene_all,
 # effect function plotter -----
 
 
-effect_plotter_function <- function(gene_name){
+effect_plotter_function <- function(gene_name, strip_text = F, x_axis_text = F,log10_TF=T, plot_y_axis_breaks=NULL, plot_y_axis_labels=NULL,plot_y_limits = NULL){
   
   CIC <- selection_data_main_clean_wNA_wide_join %>%
     filter(Gene %in% c(gene_name)) 
@@ -664,11 +664,28 @@ effect_plotter_function <- function(gene_name){
   
   
   if(length(grep(pattern = ":",x = CIC$variant_name))>0){
-   
+    
     CIC$variant_name[grep(pattern = ":",x = CIC$variant_name)] <- "Noncoding"
-     
+    
     
   }
+  
+  
+  if(log10_TF){
+    CIC <- CIC %>%
+      mutate(selection_intensity = log10(selection_intensity))
+    
+    CIC_long <- CIC_long %>%
+      mutate(Female = log10(Female), 
+             Male = log10(Male))
+    
+  }
+  
+  if(is.null(plot_y_limits)){
+    plot_y_limits <- c(min(CIC$selection_intensity),max(CIC$selection_intensity))
+    
+  }
+  
   
   
   CIC_plot <- ggplot(CIC,
@@ -683,24 +700,52 @@ effect_plotter_function <- function(gene_name){
     geom_point(aes(color=m_f_or_both,x=as.numeric(m_f)),alpha=0.8,size=4) +
     geom_segment(data=CIC_long,
                  aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
-    scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x,n = 3),labels = trans_format("log10", math_format(10^.x))) +
+    # scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x,n = 3),labels = trans_format("log10", math_format(10^.x))) +
+    # scale_y_log10() +
     labs(y="Cancer effect size", x="Sex") +
     theme_bw() +
     theme(strip.text.y = element_text(angle = 90),
-          axis.title.y = element_blank(),axis.title.x = element_blank()) +
+          axis.title.y = element_blank(),axis.title.x = element_blank(),
+          text = element_text(size=theme.size)) +
     theme(legend.position = "none") +
     scale_color_manual(values = color_vec_mf) + 
-    scale_x_continuous(limits=c(0.25,2.75),breaks = c(1,2),labels = c("Female","Male"))
+    scale_x_continuous(limits=c(0.25,2.75),breaks = c(1,2),labels = c("Female","Male")) + 
+    theme(panel.grid.minor.x = element_blank())
   
-  if(gene_name == "SPATA31D1"){
+  if(strip_text == F){
     CIC_plot <- CIC_plot + 
-      theme(strip.text.y = element_text(size = 5))
-      
+      theme(strip.background.x = element_blank(),
+            strip.text.x = element_blank())
+    
   }
+  
+  if(x_axis_text == F){
+    CIC_plot <- CIC_plot + 
+      theme(axis.text.x = element_blank(),
+            axis.ticks.x = element_blank())
+  }
+  
+  
+  
+  if(!is.null(plot_y_axis_breaks)){
+    CIC_plot <- CIC_plot + 
+      scale_y_continuous(breaks=plot_y_axis_breaks,
+                         labels = plot_y_axis_labels,
+                         limits = c(plot_y_limits[1],plot_y_limits[2]))
+    
+  }
+  
+  
+  # if(gene_name == "SPATA31D1"){
+  #   CIC_plot <- CIC_plot + 
+  #     theme(strip.text.y = element_text(size = 5))
+  #     
+  # }
   
   return(CIC_plot)
   
 }
+
 ```
 
 
@@ -710,8 +755,8 @@ effect_plotter_function <- function(gene_name){
 
 # load("output_data/prior_to_fig2_work.RData")
 library(ggrepel);library(scales)
-geom.text.size = 3
-theme.size = (14/5) * geom.text.size
+geom.text.size = 3.9
+theme.size = 3.2 * geom.text.size
 
 points_per_gene <- selection_data_main_clean_wNA_wide %>%
   count(Gene) %>% 
@@ -740,88 +785,90 @@ selection_data_main_clean_wNA_wide_join <- left_join(x = selection_data_main_cle
 
 # TP53 ---- 
 
-TP53 <- selection_data_main_clean_wNA_wide_join %>%
-  filter(Gene %in% c("TP53")) #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
-TP53_long <- selection_data_main_clean_wNA %>%
-  filter(Gene %in% "TP53") #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# TP53 <- selection_data_main_clean_wNA_wide_join %>%
+#   filter(Gene %in% c("TP53")) #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# TP53_long <- selection_data_main_clean_wNA %>%
+#   filter(Gene %in% "TP53") #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# 
+# 
+# TP53_plot <- ggplot(TP53, 
+#                     aes(x=m_f,y=selection_intensity)) + 
+#   facet_grid(vars(Gene),vars(idh_status),scales = "free") + 
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
+#   #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
+#   #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
+#   
+#   geom_text_repel(data = subset(TP53,m_f=="Female"),size=geom.text.size,
+#                   hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
+#   geom_text_repel(data = subset(TP53,m_f=="Male"),size=geom.text.size,
+#                   nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
+#   geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
+#   geom_segment(data=TP53_long,
+#                aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) + 
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
+#   labs(y="Cancer effect size", x="Sex") +
+#   theme_bw() + 
+#   theme(strip.text.y = element_text(angle = 90),
+#         # legend.position = "none",
+#         axis.title.y = element_blank(),axis.title.x = element_blank()) + 
+#   theme(legend.position = "none") + 
+#   scale_color_manual(values = color_vec_mf)
+# 
 
-
-TP53_plot <- ggplot(TP53, 
-                    aes(x=m_f,y=selection_intensity)) + 
-  facet_grid(vars(Gene),vars(idh_status),scales = "free") + 
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
-  #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
-  #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
-  
-  geom_text_repel(data = subset(TP53,m_f=="Female"),size=geom.text.size,
-                  hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
-  geom_text_repel(data = subset(TP53,m_f=="Male"),size=geom.text.size,
-                  nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
-  geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
-  geom_segment(data=TP53_long,
-               aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) + 
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
-  labs(y="Cancer effect size", x="Sex") +
-  theme_bw() + 
-  theme(strip.text.y = element_text(angle = 90),
-        # legend.position = "none",
-        axis.title.y = element_blank(),axis.title.x = element_blank()) + 
-  theme(legend.position = "none") + 
-  scale_color_manual(values = color_vec_mf)
-
-
-TP53_plot <- effect_plotter_function("TP53")
+TP53_plot <- effect_plotter_function("TP53",strip_text = T,
+                                     plot_y_axis_breaks = c(4,5,6),plot_y_axis_labels = c("4.0","5.0","6.0"))
 # EGFR ----- 
 
 
-EGFR <- selection_data_main_clean_wNA_wide_join %>%
-  filter(Gene %in% c("EGFR")) #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
-EGFR_long <- selection_data_main_clean_wNA %>%
-  filter(Gene %in% "EGFR") #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# EGFR <- selection_data_main_clean_wNA_wide_join %>%
+#   filter(Gene %in% c("EGFR")) #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# EGFR_long <- selection_data_main_clean_wNA %>%
+#   filter(Gene %in% "EGFR") #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
 
+#
+# EGFR <- EGFR %>%
+#   mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
+#                                   TRUE ~ variant_name)) 
+# 
+# EGFR_plot <- ggplot(EGFR, 
+#                     aes(x=m_f,y=selection_intensity)) + 
+#   facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) + 
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
+#   #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
+#   #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
+#   
+#   geom_text_repel(data = subset(EGFR,m_f=="Female"),size=geom.text.size,
+#                   hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
+#   geom_text_repel(data = subset(EGFR,m_f=="Male"),size=geom.text.size,
+#                   nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
+#   geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
+#   geom_segment(data=EGFR_long,
+#                aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) + 
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
+#   labs(y="Cancer effect size", x="Sex") +
+#   theme_bw() + 
+#   theme(strip.text.y = element_text(angle = 90),
+#         # legend.position = "none",
+#         axis.title.y = element_blank(),axis.title.x = element_blank()) + 
+#   theme(legend.position = "none") + 
+#   scale_color_manual(values = color_vec_mf)
 
-EGFR <- EGFR %>%
-  mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
-                                  TRUE ~ variant_name)) 
-
-EGFR_plot <- ggplot(EGFR, 
-                    aes(x=m_f,y=selection_intensity)) + 
-  facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) + 
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
-  #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
-  #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
-  
-  geom_text_repel(data = subset(EGFR,m_f=="Female"),size=geom.text.size,
-                  hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
-  geom_text_repel(data = subset(EGFR,m_f=="Male"),size=geom.text.size,
-                  nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
-  geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
-  geom_segment(data=EGFR_long,
-               aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) + 
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
-  labs(y="Cancer effect size", x="Sex") +
-  theme_bw() + 
-  theme(strip.text.y = element_text(angle = 90),
-        # legend.position = "none",
-        axis.title.y = element_blank(),axis.title.x = element_blank()) + 
-  theme(legend.position = "none") + 
-  scale_color_manual(values = color_vec_mf)
-
-EGFR_plot <- effect_plotter_function("EGFR")
+EGFR_plot <- effect_plotter_function("EGFR",x_axis_text = T,
+                                     plot_y_axis_breaks = c(3.5,4.5),plot_y_axis_labels = c("3.5","4.5"))
 
 
 ab <- cowplot::plot_grid(TP53_plot,EGFR_plot,nrow = 2,labels = c("A","B"))
@@ -830,139 +877,146 @@ ab <- cowplot::plot_grid(TP53_plot,EGFR_plot,nrow = 2,labels = c("A","B"))
 
 # PTEN ---- 
 
-PTEN <- selection_data_main_clean_wNA_wide_join %>%
-  filter(Gene %in% c("PTEN")) #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
-PTEN_long <- selection_data_main_clean_wNA %>%
-  filter(Gene %in% "PTEN") #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# PTEN <- selection_data_main_clean_wNA_wide_join %>%
+#   filter(Gene %in% c("PTEN")) #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# PTEN_long <- selection_data_main_clean_wNA %>%
+#   filter(Gene %in% "PTEN") #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# 
+# 
+# # EGFR <- EGFR %>%
+# # mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
+# # TRUE ~ variant_name))
+# 
+# PTEN_plot <- ggplot(PTEN,
+#                     aes(x=m_f,y=selection_intensity)) +
+#   facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
+#   #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
+#   #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
+# 
+#   geom_text_repel(data = subset(PTEN,m_f=="Female"),size=geom.text.size,
+#                   hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
+#   geom_text_repel(data = subset(PTEN,m_f=="Male"),size=geom.text.size,
+#                   nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
+#   geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
+#   geom_segment(data=PTEN_long,
+#                aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
+#   labs(y="Cancer effect size", x="Sex") +
+#   theme_bw() +
+#   theme(strip.text.y = element_text(angle = 90),
+#         # legend.position = "none",
+#         axis.title.y = element_blank(),axis.title.x = element_blank()) +
+#   theme(legend.position = "none") +
+#   scale_color_manual(values = color_vec_mf)
 
-
-# EGFR <- EGFR %>%
-# mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
-# TRUE ~ variant_name)) 
-
-PTEN_plot <- ggplot(PTEN, 
-                    aes(x=m_f,y=selection_intensity)) + 
-  facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) + 
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
-  #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
-  #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
-  
-  geom_text_repel(data = subset(PTEN,m_f=="Female"),size=geom.text.size,
-                  hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
-  geom_text_repel(data = subset(PTEN,m_f=="Male"),size=geom.text.size,
-                  nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
-  geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
-  geom_segment(data=PTEN_long,
-               aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) + 
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
-  labs(y="Cancer effect size", x="Sex") +
-  theme_bw() + 
-  theme(strip.text.y = element_text(angle = 90),
-        # legend.position = "none",
-        axis.title.y = element_blank(),axis.title.x = element_blank()) + 
-  theme(legend.position = "none") + 
-  scale_color_manual(values = color_vec_mf)
-
-
-PTEN_plot <- effect_plotter_function("PTEN")
+selection_data_main_clean_wNA_wide %>% filter(Gene == "PTEN") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot) %>% summary()
+PTEN_plot <- effect_plotter_function("PTEN",strip_text = T,
+                                     plot_y_axis_breaks = c(2.5,3.5,4.5), plot_y_axis_labels = c(2.5,3.5,4.5),plot_y_limits = c(2.8,4.5))
+                                     # plot_y_limits = c(2,5))
 
 # PIK3CA ------ 
 
 
-PIK3CA <- selection_data_main_clean_wNA_wide_join %>%
-  filter(Gene %in% c("PIK3CA")) #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
-PIK3CA_long <- selection_data_main_clean_wNA %>%
-  filter(Gene %in% "PIK3CA") #%>%
-# mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# PIK3CA <- selection_data_main_clean_wNA_wide_join %>%
+#   filter(Gene %in% c("PIK3CA")) #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# PIK3CA_long <- selection_data_main_clean_wNA %>%
+#   filter(Gene %in% "PIK3CA") #%>%
+# # mutate(Gene = forcats::fct_relevel(Gene,points_per_gene$Gene[7:nrow(points_per_gene)]))
+# 
+# 
+# # EGFR <- EGFR %>%
+# # mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
+# # TRUE ~ variant_name))
+# 
+# PIK3CA_plot <- ggplot(PIK3CA,
+#                       aes(x=m_f,y=selection_intensity)) +
+#   facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
+#   #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
+#   # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
+#   #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
+#   
+#   geom_text_repel(data = subset(PIK3CA,m_f=="Female"),size=geom.text.size,
+#                   hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
+#   geom_text_repel(data = subset(PIK3CA,m_f=="Male"),size=geom.text.size,
+#                   nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
+#   # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
+#   geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
+#   geom_segment(data=PIK3CA_long,
+#                aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
+#   labs(y="Cancer effect size", x="Sex") +
+#   theme_bw() +
+#   theme(strip.text.y = element_text(angle = 90),
+#         # legend.position = "none",
+#         axis.title.y = element_blank(),axis.title.x = element_blank()) +
+#   theme(legend.position = "none") +
+#   scale_color_manual(values = color_vec_mf)
 
 
-# EGFR <- EGFR %>%
-# mutate(variant_name = case_when(variant_name == "7:55260458 G>A" ~ "Noncoding",
-# TRUE ~ variant_name))
-
-PIK3CA_plot <- ggplot(PIK3CA,
-                      aes(x=m_f,y=selection_intensity)) +
-  facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) +
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Female"),size=1,
-  #           hjust=1,check_overlap = F,nudge_x = -0.05,aes(label=variant_name)) +
-  # geom_text(data = subset(selection_data_for_2_1,m_f=="Male"),size=1,
-  #           hjust=0,check_overlap = F,nudge_x = 0.05,aes(label=variant_name)) +
-  
-  geom_text_repel(data = subset(PIK3CA,m_f=="Female"),size=geom.text.size,
-                  hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
-  geom_text_repel(data = subset(PIK3CA,m_f=="Male"),size=geom.text.size,
-                  nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
-  # geom_point(aes(shape=`Variant type`,color=m_f_or_both),alpha=0.8) +
-  geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
-  geom_segment(data=PIK3CA_long,
-               aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
-  labs(y="Cancer effect size", x="Sex") +
-  theme_bw() +
-  theme(strip.text.y = element_text(angle = 90),
-        # legend.position = "none",
-        axis.title.y = element_blank(),axis.title.x = element_blank()) +
-  theme(legend.position = "none") +
-  scale_color_manual(values = color_vec_mf)
-
-
-PIK3CA_plot <- effect_plotter_function("PIK3CA")
+PIK3CA_plot <- effect_plotter_function("PIK3CA",
+                                       plot_y_axis_breaks = c(4,4.5),plot_y_axis_labels = c("4.0","4.5"),plot_y_limits = c(3.5,5))
 
 
 
 # CIC ------ 
 
-CIC <- selection_data_main_clean_wNA_wide_join %>%
-  filter(Gene %in% c("CIC")) 
+# CIC <- selection_data_main_clean_wNA_wide_join %>%
+#   filter(Gene %in% c("CIC")) 
+# 
+# CIC_long <- selection_data_main_clean_wNA %>%
+#   filter(Gene %in% "CIC")
+# 
+# CIC_plot <- ggplot(CIC,
+#                    aes(x=m_f,y=selection_intensity)) +
+#   facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) +
+#   geom_text_repel(data = subset(CIC,m_f=="Female"),size=geom.text.size,
+#                   hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
+#   geom_text_repel(data = subset(CIC,m_f=="Male"),size=geom.text.size,
+#                   nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
+#                   segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
+#   geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
+#   geom_segment(data=CIC_long,
+#                aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
+#   scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
+#   labs(y="Cancer effect size", x="Sex") +
+#   theme_bw() +
+#   theme(strip.text.y = element_text(angle = 90),
+#         axis.title.y = element_blank(),axis.title.x = element_blank()) +
+#   theme(legend.position = "none") +
+#   scale_color_manual(values = color_vec_mf)
+# 
 
-CIC_long <- selection_data_main_clean_wNA %>%
-  filter(Gene %in% "CIC")
 
-CIC_plot <- ggplot(CIC,
-                   aes(x=m_f,y=selection_intensity)) +
-  facet_grid(vars(Gene),vars(idh_status),scales = "free",drop=F) +
-  geom_text_repel(data = subset(CIC,m_f=="Female"),size=geom.text.size,
-                  hjust=1,nudge_x = -0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction = "y",segment.alpha = 0.8,segment.size = 0.2) +
-  geom_text_repel(data = subset(CIC,m_f=="Male"),size=geom.text.size,
-                  nudge_x = 0.25,aes(label=variant_name,color=m_f_or_both),
-                  segment.color="gray50",direction="y",segment.alpha = .8,hjust=0,segment.size = 0.2) +
-  geom_point(aes(color=m_f_or_both),alpha=0.8,size=4) +
-  geom_segment(data=CIC_long,
-               aes(x=1,xend=2,y=Female,yend=Male),color="black",alpha=0.9) +
-  scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),labels = trans_format("log10", math_format(10^.x))) +
-  labs(y="Cancer effect size", x="Sex") +
-  theme_bw() +
-  theme(strip.text.y = element_text(angle = 90),
-        axis.title.y = element_blank(),axis.title.x = element_blank()) +
-  theme(legend.position = "none") +
-  scale_color_manual(values = color_vec_mf)
-
-
-
-CIC_plot <- effect_plotter_function("CIC")
+CIC_plot <- effect_plotter_function("CIC", 
+                                    plot_y_axis_breaks = c(4,5),
+                                    plot_y_axis_labels = c("4.0","5.0"),
+                                    plot_y_limits = c(3.7,6))
 
 
 
 
 # IDH1 ----- 
 
-IDH1 <- effect_plotter_function("IDH1")
+IDH1 <- effect_plotter_function("IDH1",plot_y_axis_breaks = c(6,7),
+                                plot_y_axis_labels = c("6.0","7.0"))
 
 # ATRX ---- 
 
-ATRX <- effect_plotter_function("ATRX")
+ATRX <- effect_plotter_function("ATRX",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"))
 
 
 
@@ -976,16 +1030,28 @@ abcdefg <- cowplot::plot_grid(ab,cdefg,nrow = 1)
 
 cowplot::save_plot(plot = abcdefg,filename = "output_data/abcdefg.png",base_height = 10,base_width = 10)
 
+# PIK3R1 -----
+PIK3R1 <- effect_plotter_function("PIK3R1",x_axis_text = T,
+                                  plot_y_axis_breaks = c(4,4.5),plot_y_axis_labels = c("4.0","4.5"))
 
-PIK3R1 <- effect_plotter_function("PIK3R1")
 
-IDH2 <- effect_plotter_function("IDH2")
+# IDH2 ----
+IDH2 <- effect_plotter_function("IDH2",strip_text = T,
+                                plot_y_axis_breaks = c(4.5,5),plot_y_axis_labels = c("4.5","5.0"),
+                                plot_y_limits = c(4.2,5.2))
 
-NF1 <- effect_plotter_function("NF1")
 
-PTPN11 <- effect_plotter_function("PTPN11")
+# NF1 -----
+NF1 <- effect_plotter_function("NF1",plot_y_axis_breaks = c(3.0,3.4),plot_y_axis_labels = c("3.0","3.4"),plot_y_limits = c(2.5,3.75))
 
-TRAT1 <- effect_plotter_function("TRAT1")
+
+# PTPN11 -----
+PTPN11 <- effect_plotter_function("PTPN11", plot_y_axis_breaks = c(3.4,3.8),
+                                  plot_y_axis_labels = c("3.4","3.8"),plot_y_limits = c(3.3,4.1))
+
+
+# TRAT1 ----
+TRAT1 <- effect_plotter_function("TRAT1",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"),plot_y_limits = c(2.9,4.75))
 
 
 
@@ -995,18 +1061,40 @@ al <- cowplot::plot_grid(ab,cdefg,hijkl,nrow = 1)
 
 cowplot::save_plot(plot=al,filename = "output_data/al.png",base_height = 10,base_width = 15)
 
+# H3F3A ----
 
-H3F3A <- effect_plotter_function("H3F3A")
+selection_data_main_clean_wNA_wide %>% filter(Gene == "H3F3A") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
 
-KIF2B <- effect_plotter_function("KIF2B")
+H3F3A <- effect_plotter_function("H3F3A",plot_y_axis_breaks = c(3.8,3.9),
+                                 plot_y_axis_labels = c("3.8","3.9"),plot_y_limits = c(3.79,3.94))
 
-PDGFRA <- effect_plotter_function("PDGFRA")
 
-RB1 <- effect_plotter_function("RB1")
+# KIF2B -----
+selection_data_main_clean_wNA_wide %>% filter(Gene == "KIF2B") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+KIF2B <- effect_plotter_function("KIF2B", plot_y_axis_breaks = c(3.1,3.2), plot_y_axis_labels = c("3.1","3.2"),plot_y_limits = c(3.09,3.24))
 
-SPATA31D1 <- effect_plotter_function("SPATA31D1")
 
-STAG2 <- effect_plotter_function("STAG2")
+# PDGFRA ----
+
+selection_data_main_clean_wNA_wide %>% filter(Gene == "PDGFRA") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+
+PDGFRA <- effect_plotter_function("PDGFRA",plot_y_axis_breaks = c(3.2,3.3),plot_y_axis_labels = c("3.2","3.3"),plot_y_limits = c(3.19,3.34))
+
+# RB1 ----
+
+selection_data_main_clean_wNA_wide %>% filter(Gene == "RB1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+
+RB1 <- effect_plotter_function("RB1",plot_y_axis_breaks = c(3.3,3.4),plot_y_axis_labels = c("3.3","3.4"),plot_y_limits = c(3.29,3.44))
+
+
+# SPATA31D1 ----
+selection_data_main_clean_wNA_wide %>% filter(Gene == "SPATA31D1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+SPATA31D1 <- effect_plotter_function("SPATA31D1",plot_y_axis_breaks = c(4.0,4.1),plot_y_axis_labels = c("4.0","4.1"),plot_y_limits = c(3.99,4.14))
+
+
+# STAG2 -----
+selection_data_main_clean_wNA_wide %>% filter(Gene == "STAG2") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+STAG2 <- effect_plotter_function("STAG2",x_axis_text = T,plot_y_axis_breaks = c(3.5,3.6),plot_y_axis_labels = c("3.5","3.6"),plot_y_limits = c(3.49,3.64) )
 
 
 
@@ -1019,7 +1107,61 @@ a_r <- cowplot::plot_grid(ab,cdefgh,ir,nrow = 1)
 
 
 cowplot::save_plot(plot = a_r,filename = "output_data/Fig_2_a_r.png",base_height = 11,base_width = 20)
-cowplot::save_plot(plot = a_r,filename = "figures/Fig_2_a_r.png",base_height = 11,base_width = 20)
+# cowplot::save_plot(plot = a_r,filename = "figures/Fig_2_a_r.png",base_height = 11,base_width = 20)
+
+
+library(cowplot)
+# now add the title
+y_label <- ggdraw() +
+  draw_label(
+    "Cancer effect size (log10 scale)",
+    fontface = 'bold',
+    x = 0,
+    angle=90,
+    y=0.5,
+    vjust = 0.5,
+    hjust = 0.5
+  ) +
+  theme(
+    # add margin on the left of the drawing canvas,
+    # so title is aligned with left edge of first plot
+    plot.margin = margin(0, 0, 0, 7)
+  )
+
+x_label <- ggdraw() +
+  draw_label(
+    "Sex",
+    fontface = 'bold',
+    x = 0.505,
+    angle=0,
+    y=0,
+    vjust = 0.5,
+    hjust = 0.5
+  ) +
+  theme(
+    # add margin on the left of the drawing canvas,
+    # so title is aligned with left edge of first plot
+    plot.margin = margin(0, 0, 7, 0)
+  )
+
+
+
+a_r_lab <- plot_grid(
+  y_label, a_r,
+  ncol = 2,
+  # rel_heights values control vertical title margins
+  rel_widths = c(0.01, 1)
+)
+
+
+a_r_lab <- plot_grid(
+  a_r_lab, x_label,
+  nrow = 2,
+  # rel_heights values control vertical title margins
+  rel_heights = c(1, 0.01)
+)
+
+cowplot::save_plot(plot = a_r_lab,filename = "figures/Fig_2_a_r.png",base_height = 12,base_width = 20)
 
 
 
@@ -1151,10 +1293,12 @@ halo_sigs_w_zero_count <- halo_sigs_w_zero %>%
 
 
 halo_sigs_plot_w_zero_jitter <- ggplot(halo_sigs_w_zero, aes(x=tumor_type, y=SBS42)) + 
-  geom_jitter(height = 0,width = 0.2,alpha=0.5) + 
+  geom_jitter(aes(color=SBS42),height = 0,width = 0.2,alpha=0.8) + 
   geom_text(data = halo_sigs_w_zero_count,aes(x=as.numeric(tumor_type)+0.6,y=zero_or_no,label=n),hjust=1) +
   theme_classic() + 
-  labs(x="Tumor type",y="Occupational exposure to haloalkanes (42) \nsignature weight")
+  labs(x="Tumor type",y="Occupational exposure to haloalkanes (42) \nsignature weight") + 
+  scale_color_gradient(low="gray10",high = "darkred") + 
+  theme(legend.position = "none")
 
 
 ggsave(filename = "figures/fig_5_halo_sigs_jitter.png",plot = halo_sigs_plot_w_zero_jitter,width = 6,height = 4)

@@ -1,6 +1,6 @@
 
 
-These scripts reproduce the analyses and figures implemented within the manuscript `Environmental and sex-specific molecular signatures of glioma causation` by Elizabeth B. Claus MD PhD\* and Vincent Cannataro PhD\*, Stephen G. Gaffney PhD, and Jeffrey P. Townsend PhD
+These scripts reproduce the analyses and figures implemented within the manuscript `Environmental and sex-specific molecular signatures of glioma causation` by Elizabeth B. Claus MD PhD\* and Vincent L. Cannataro PhD\*, Stephen G. Gaffney PhD, and Jeffrey P. Townsend PhD
 
 \*: co-first-authors
 
@@ -20,6 +20,6 @@ Steps in the analysis:
 
 5. Run `analysis_scripts/per_tumor_scaled_effect_results_combiner.R`
 
-6. Run 
+6. Run `glioma_subset_results` to perform additional calculations and generate manuscript figures.
 
 
