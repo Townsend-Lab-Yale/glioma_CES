@@ -6,6 +6,14 @@ These scripts reproduce the analyses and figures implemented within the manuscri
 
 Steps in the analysis:
 
+0. These analyses utilize the [cancereffectsizeR](https://townsend-lab-yale.github.io/cancereffectsizeR/) R package, version 0.1.1.9010, which can be installed via 
+
+```
+remotes::install_github( \
+        "Townsend-Lab-Yale/cancereffectsizeR", \
+        ref = "140b261e5bd32ac064718d588e6b7310f3e601a4")
+``` 
+
 1. In the `input_data` directory, you need to download the freely available raw data from GLASS and TCGA. These files are called within `data_preprocess.Rmd`, so check the comments within that script for more information
 
     1.1. From GLASS https://www.synapse.org/#!Synapse:syn17038081/tables/ : `variants_anno.csv`, `variants_passgeno.csv`, `clinical_cases.csv`, `clinical_surgeries.csv` 
