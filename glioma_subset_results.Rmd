@@ -147,8 +147,9 @@ lolli <- lolli + theme_bw() +
         legend.text = element_text(size=12.2))
 
 
-ggsave(filename = "figures/fig_1_glioma_CES.png",plot = lolli,width = 15,height = 10)
-
+# ggsave(filename = "figures/fig_1_glioma_CES.png",plot = lolli,width = 15,height = 10)
+# ggsave(filename = "figures/fig_1_glioma_CES.tiff",plot = lolli,width = 15,height = 10)
+ggsave(filename = "figures/fig_1_glioma_CES.eps",plot = lolli,width = 15,height = 10,device = cairo_ps)
 
 ```
 
@@ -328,7 +329,11 @@ for(tumortype_ind in 1:length(unique(per_tumor_data_main$tumor_type))){
 
 all_nrsi <- cowplot::plot_grid(plotlist = plot_list,nrow = 2,align = "hv",labels = "AUTO")
 
-cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.png",base_height = 6,base_width = 10)
+# cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.png",base_height = 6,base_width = 10)
+
+cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.eps",base_height = 6,base_width = 10,device = cairo_ps)
+
+
 
 
 
@@ -931,7 +936,7 @@ IDH1 <- IDH1 +
 
 # ATRX ---- 
 
-ATRX <- effect_plotter_function("ATRX",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"))
+ATRX <- effect_plotter_function("ATRX",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"),x_axis_text = T)
 
 
 plot_text_annot <- ATRX$data[which.max(ATRX$data$selection_intensity),]
@@ -956,8 +961,8 @@ abcdefg <- cowplot::plot_grid(ab,cdefg,nrow = 1)
 cowplot::save_plot(plot = abcdefg,filename = "output_data/abcdefg.png",base_height = 10,base_width = 10)
 
 # PIK3R1 -----
-PIK3R1 <- effect_plotter_function("PIK3R1",x_axis_text = T,
-                                  plot_y_axis_breaks = c(4,4.5),plot_y_axis_labels = c("4.0","4.5"))
+PIK3R1 <- effect_plotter_function("PIK3R1",x_axis_text = F,
+                                  plot_y_axis_breaks = c(4,4.5),plot_y_axis_labels = c("4.0","4.5"),strip_text = T)
 
 plot_text_annot <- PIK3R1$data[which.max(PIK3R1$data$selection_intensity),]
 plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
@@ -973,7 +978,7 @@ PIK3R1 <- PIK3R1 +
 
 
 # IDH2 ----
-IDH2 <- effect_plotter_function("IDH2",strip_text = T,
+IDH2 <- effect_plotter_function("IDH2",strip_text = F,
                                 plot_y_axis_breaks = c(4.5,5),plot_y_axis_labels = c("4.5","5.0"),
                                 plot_y_limits = c(4.2,5.2))
 
@@ -1021,7 +1026,7 @@ PTPN11 <- PTPN11 +
 
 
 # TRAT1 ----
-TRAT1 <- effect_plotter_function("TRAT1",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"),plot_y_limits = c(2.9,4.75))
+TRAT1 <- effect_plotter_function("TRAT1",plot_y_axis_breaks = c(3,4),plot_y_axis_labels = c("3.0","4.0"),plot_y_limits = c(2.9,4.75),x_axis_text = T)
 
 plot_text_annot <- TRAT1$data[which.max(TRAT1$data$selection_intensity),]
 plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
@@ -1040,109 +1045,111 @@ hijkl <- cowplot::plot_grid(PIK3R1,IDH2,NF1,PTPN11,TRAT1,ncol = 1,labels = c("H"
 al <- cowplot::plot_grid(ab,cdefg,hijkl,nrow = 1)
 
 cowplot::save_plot(plot=al,filename = "output_data/al.png",base_height = 10,base_width = 15)
+# 
+# # H3F3A ----
+# 
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "H3F3A") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# 
+# H3F3A <- effect_plotter_function("H3F3A",plot_y_axis_breaks = c(3.8,3.9),
+#                                  plot_y_axis_labels = c("3.8","3.9"),plot_y_limits = c(3.79,3.94))
+# 
+# plot_text_annot <- H3F3A$data[which.max(H3F3A$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# H3F3A <- H3F3A + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.914,label="H3F3A",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# 
+# 
+# # KIF2B -----
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "KIF2B") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# KIF2B <- effect_plotter_function("KIF2B", plot_y_axis_breaks = c(3.1,3.2), plot_y_axis_labels = c("3.1","3.2"),plot_y_limits = c(3.09,3.24))
+# 
+# plot_text_annot <- KIF2B$data[which.max(KIF2B$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# KIF2B <- KIF2B + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.21,label="KIF2B",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# # PDGFRA ----
+# 
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "PDGFRA") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# 
+# PDGFRA <- effect_plotter_function("PDGFRA",plot_y_axis_breaks = c(3.2,3.3),plot_y_axis_labels = c("3.2","3.3"),plot_y_limits = c(3.19,3.34))
+# 
+# plot_text_annot <- PDGFRA$data[which.max(PDGFRA$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# PDGFRA <- PDGFRA + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.31,label="PDGFRA",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# # RB1 ----
+# 
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "RB1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# 
+# RB1 <- effect_plotter_function("RB1",plot_y_axis_breaks = c(3.3,3.4),plot_y_axis_labels = c("3.3","3.4"),plot_y_limits = c(3.29,3.44))
+# 
+# plot_text_annot <- RB1$data[which.max(RB1$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# RB1 <- RB1 + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.41,label="RB1",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# # SPATA31D1 ----
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "SPATA31D1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# SPATA31D1 <- effect_plotter_function("SPATA31D1",plot_y_axis_breaks = c(4.0,4.1),plot_y_axis_labels = c("4.0","4.1"),plot_y_limits = c(3.99,4.14))
+# 
+# plot_text_annot <- SPATA31D1$data[which.max(SPATA31D1$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# SPATA31D1 <- SPATA31D1 + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=4.11,label="SPATA31D1",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# # STAG2 -----
+# selection_data_main_clean_wNA_wide %>% filter(Gene == "STAG2") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# STAG2 <- effect_plotter_function("STAG2",x_axis_text = T,plot_y_axis_breaks = c(3.5,3.6),plot_y_axis_labels = c("3.5","3.6"),plot_y_limits = c(3.49,3.64) )
+# 
+# plot_text_annot <- STAG2$data[which.max(STAG2$data$selection_intensity),]
+# plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
+# plot_text_annot$idh_status[1] <- "IDH mutant"
+# plot_text_annot$idh_status[2] <- "IDH wildtype"
+# 
+# STAG2 <- STAG2 + 
+#   geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.61,label="STAG2",fontface="bold"),
+#             size=annotation_text_size,hjust=0) +
+#   theme(strip.text.y = element_blank())
+# 
+# cdefgh <- cowplot::plot_grid(PTEN_plot,PIK3CA_plot,CIC_plot,IDH1,ATRX,PIK3R1,ncol = 1,labels = c("C","D","E","F","G","H"))
+# 
+# ir <- cowplot::plot_grid(
+#   IDH2,NF1,PTPN11,TRAT1,H3F3A,KIF2B,PDGFRA,RB1,SPATA31D1,STAG2,ncol=1,labels=LETTERS[9:18])
+# 
+# a_r <- cowplot::plot_grid(ab,cdefgh,ir,nrow = 1)
 
-# H3F3A ----
 
-selection_data_main_clean_wNA_wide %>% filter(Gene == "H3F3A") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
+# cowplot::save_plot(plot = a_r,filename = "output_data/Fig_2_a_r.png",base_height = 11,base_width = 20)
 
-H3F3A <- effect_plotter_function("H3F3A",plot_y_axis_breaks = c(3.8,3.9),
-                                 plot_y_axis_labels = c("3.8","3.9"),plot_y_limits = c(3.79,3.94))
-
-plot_text_annot <- H3F3A$data[which.max(H3F3A$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-H3F3A <- H3F3A + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.914,label="H3F3A",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-
-
-# KIF2B -----
-selection_data_main_clean_wNA_wide %>% filter(Gene == "KIF2B") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
-KIF2B <- effect_plotter_function("KIF2B", plot_y_axis_breaks = c(3.1,3.2), plot_y_axis_labels = c("3.1","3.2"),plot_y_limits = c(3.09,3.24))
-
-plot_text_annot <- KIF2B$data[which.max(KIF2B$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-KIF2B <- KIF2B + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.21,label="KIF2B",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-# PDGFRA ----
-
-selection_data_main_clean_wNA_wide %>% filter(Gene == "PDGFRA") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
-
-PDGFRA <- effect_plotter_function("PDGFRA",plot_y_axis_breaks = c(3.2,3.3),plot_y_axis_labels = c("3.2","3.3"),plot_y_limits = c(3.19,3.34))
-
-plot_text_annot <- PDGFRA$data[which.max(PDGFRA$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-PDGFRA <- PDGFRA + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.31,label="PDGFRA",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-# RB1 ----
-
-selection_data_main_clean_wNA_wide %>% filter(Gene == "RB1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
-
-RB1 <- effect_plotter_function("RB1",plot_y_axis_breaks = c(3.3,3.4),plot_y_axis_labels = c("3.3","3.4"),plot_y_limits = c(3.29,3.44))
-
-plot_text_annot <- RB1$data[which.max(RB1$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-RB1 <- RB1 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.41,label="RB1",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-# SPATA31D1 ----
-selection_data_main_clean_wNA_wide %>% filter(Gene == "SPATA31D1") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
-SPATA31D1 <- effect_plotter_function("SPATA31D1",plot_y_axis_breaks = c(4.0,4.1),plot_y_axis_labels = c("4.0","4.1"),plot_y_limits = c(3.99,4.14))
-
-plot_text_annot <- SPATA31D1$data[which.max(SPATA31D1$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-SPATA31D1 <- SPATA31D1 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=4.11,label="SPATA31D1",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-# STAG2 -----
-selection_data_main_clean_wNA_wide %>% filter(Gene == "STAG2") %>% mutate(for_plot = log10(selection_intensity)) %>% pull(for_plot)
-STAG2 <- effect_plotter_function("STAG2",x_axis_text = T,plot_y_axis_breaks = c(3.5,3.6),plot_y_axis_labels = c("3.5","3.6"),plot_y_limits = c(3.49,3.64) )
-
-plot_text_annot <- STAG2$data[which.max(STAG2$data$selection_intensity),]
-plot_text_annot <- rbind(plot_text_annot,plot_text_annot)
-plot_text_annot$idh_status[1] <- "IDH mutant"
-plot_text_annot$idh_status[2] <- "IDH wildtype"
-
-STAG2 <- STAG2 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=3.61,label="STAG2",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
-  theme(strip.text.y = element_blank())
-
-cdefgh <- cowplot::plot_grid(PTEN_plot,PIK3CA_plot,CIC_plot,IDH1,ATRX,PIK3R1,ncol = 1,labels = c("C","D","E","F","G","H"))
-
-ir <- cowplot::plot_grid(
-  IDH2,NF1,PTPN11,TRAT1,H3F3A,KIF2B,PDGFRA,RB1,SPATA31D1,STAG2,ncol=1,labels=LETTERS[9:18])
-
-a_r <- cowplot::plot_grid(ab,cdefgh,ir,nrow = 1)
-
-
-cowplot::save_plot(plot = a_r,filename = "output_data/Fig_2_a_r.png",base_height = 11,base_width = 20)
+# cowplot::save_plot(plot = a_r,filename = "output_data/Fig_2_a_r.eps",base_height = 11,base_width = 20,device=cairo_ps)
 # cowplot::save_plot(plot = a_r,filename = "figures/Fig_2_a_r.png",base_height = 11,base_width = 20)
 
 
@@ -1169,7 +1176,7 @@ x_label <- ggdraw() +
   draw_label(
     "Sex",
     fontface = 'bold',
-    x = 0.505,
+    x = 0.515,
     angle=0,
     y=0,
     vjust = 0.5,
@@ -1184,23 +1191,25 @@ x_label <- ggdraw() +
 
 
 
-a_r_lab <- plot_grid(
-  y_label, a_r,
+a_l_lab <- plot_grid(
+  y_label, al,
   ncol = 2,
   # rel_heights values control vertical title margins
-  rel_widths = c(0.01, 1)
+  rel_widths = c(0.015, 1)
 )
 
 
-a_r_lab <- plot_grid(
-  a_r_lab, x_label,
+a_l_lab <- plot_grid(
+  a_l_lab, x_label,
   nrow = 2,
   # rel_heights values control vertical title margins
   rel_heights = c(1, 0.01)
 )
 
-cowplot::save_plot(plot = a_r_lab,filename = "figures/Fig_2_a_r.png",base_height = 12,base_width = 20)
+# cowplot::save_plot(plot = a_l_lab,filename = "figures/Fig_2_a_r.png",base_height = 12,base_width = 20)
 
+
+cowplot::save_plot(plot = a_l_lab,filename = "figures/Fig_2_a_l.eps",base_height = 12,base_width = 20,device=cairo_ps)
 
 
 # a_c <- cowplot::plot_grid(TP53_plot,EGFR_plot,PTEN_plot,ncol = 1,labels = c("A","B","C"))
@@ -1360,7 +1369,17 @@ selection_data_main_for_fig3 <- selection_data_main %>%
                                               Noncoding = "snv"))
 
 
-ggplot(selection_data_main_for_fig3,aes(x=selection_intensity,y=tumor_type)) + 
+selection_data_main_for_fig3$tumor_type <- forcats::fct_recode(selection_data_main_for_fig3$tumor_type,
+                                                   `IDH mutant, Female` = "IDH_mutant_F",
+                                                   `IDH mutant, Male` = "IDH_mutant_M",
+                                                   `IDH wildtype, Female` = "IDH_WT_F",
+                                                   `IDH wildtype, Male` = "IDH_WT_M"
+)
+
+
+selection_data_main_for_fig3$tumor_type
+
+ggplot(selection_data_main_for_fig3,aes(x=selection_intensity,y=fct_rev(tumor_type))) + 
   geom_jitter(aes(shape=`Variant type`,color=`Variant type`),
               alpha=0.9,width = 0,height = .3) + 
   scale_x_log10(breaks=c(1e3,1e5,1e7),labels=expression(10^3,10^5,10^7)) + 
@@ -1372,6 +1391,8 @@ ggplot(selection_data_main_for_fig3,aes(x=selection_intensity,y=tumor_type)) +
 ggsave(filename = "figures/fig_3_selection_v_variant_type.png",
        plot = selection_v_variant_type,height = 3,width = 8)
 
+ggsave(filename = "figures/fig_3_selection_v_variant_type.eps",
+       plot = selection_v_variant_type,height = 3,width = 8,device = cairo_ps)
 
 ```
 
