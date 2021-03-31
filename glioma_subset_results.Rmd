@@ -150,6 +150,7 @@ lolli <- lolli + theme_bw() +
 # ggsave(filename = "figures/fig_1_glioma_CES.png",plot = lolli,width = 15,height = 10)
 # ggsave(filename = "figures/fig_1_glioma_CES.tiff",plot = lolli,width = 15,height = 10)
 ggsave(filename = "figures/fig_1_glioma_CES.eps",plot = lolli,width = 15,height = 10,device = cairo_ps)
+ggsave(filename = "figures/fig_1_glioma_CES.pdf",plot = lolli,width = 15,height = 10)
 
 ```
 
@@ -332,6 +333,8 @@ all_nrsi <- cowplot::plot_grid(plotlist = plot_list,nrow = 2,align = "hv",labels
 # cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.png",base_height = 6,base_width = 10)
 
 cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.eps",base_height = 6,base_width = 10,device = cairo_ps)
+
+cowplot::save_plot(plot = all_nrsi,filename = "figures/fig_4_summed_nrsi.pdf",base_height = 6,base_width = 10)
 
 
 
@@ -988,8 +991,7 @@ plot_text_annot$idh_status[1] <- "IDH mutant"
 plot_text_annot$idh_status[2] <- "IDH wildtype"
 
 IDH2 <- IDH2 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,label="IDH2",fontface="bold"),
-            size=annotation_text_size,hjust=0) +
+  geom_text(data = plot_text_annot[1,],aes(y=5.15,x=.255,label="IDH2",fontface="bold"), size=annotation_text_size,hjust=0) +
   theme(strip.text.y = element_blank())
 
 
@@ -1019,7 +1021,7 @@ plot_text_annot$idh_status[1] <- "IDH mutant"
 plot_text_annot$idh_status[2] <- "IDH wildtype"
 
 PTPN11 <- PTPN11 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=4,label="PTPN11",fontface="bold"),
+  geom_text(data = plot_text_annot[1,],aes(x=.255,y=4.05,label="PTPN11",fontface="bold"),
             size=annotation_text_size,hjust=0) +
   theme(strip.text.y = element_blank())
 
@@ -1034,7 +1036,7 @@ plot_text_annot$idh_status[1] <- "IDH mutant"
 plot_text_annot$idh_status[2] <- "IDH wildtype"
 
 TRAT1 <- TRAT1 + 
-  geom_text(data = plot_text_annot[1,],aes(x=.255,y=4.55,label="TRAT1",fontface="bold"),
+  geom_text(data = plot_text_annot[1,],aes(x=.255,y=4.6,label="TRAT1",fontface="bold"),
             size=annotation_text_size,hjust=0) +
   theme(strip.text.y = element_blank())
 
@@ -1176,7 +1178,7 @@ x_label <- ggdraw() +
   draw_label(
     "Sex",
     fontface = 'bold',
-    x = 0.515,
+    x = 0.5175,
     angle=0,
     y=0,
     vjust = 0.5,
@@ -1210,6 +1212,7 @@ a_l_lab <- plot_grid(
 
 
 cowplot::save_plot(plot = a_l_lab,filename = "figures/Fig_2_a_l.eps",base_height = 12,base_width = 20,device=cairo_ps)
+cowplot::save_plot(plot = a_l_lab,filename = "figures/Fig_2_a_l.pdf",base_height = 12,base_width = 20)
 
 
 # a_c <- cowplot::plot_grid(TP53_plot,EGFR_plot,PTEN_plot,ncol = 1,labels = c("A","B","C"))
@@ -1388,7 +1391,7 @@ ggplot(selection_data_main_for_fig3,aes(x=selection_intensity,y=fct_rev(tumor_ty
   labs(y="Tumor type", x="Cancer effect size") -> 
   selection_v_variant_type
 
-ggsave(filename = "figures/fig_3_selection_v_variant_type.png",
+ggsave(filename = "figures/fig_3_selection_v_variant_type.pdf",
        plot = selection_v_variant_type,height = 3,width = 8)
 
 ggsave(filename = "figures/fig_3_selection_v_variant_type.eps",
