@@ -1238,15 +1238,13 @@ signature_weights <- rbind(IDH_mutant_F_sigs,IDH_mutant_M_sigs,IDH_WT_F_sigs,IDH
 
 
 sig_w_for_stats <- signature_weights %>%
-  # filter(group_avg_blended == F) %>%
-  filter(sig_extraction_snvs > 35) %>%
   dplyr::select(Unique_Patient_Identifier,total_snvs,sig_extraction_snvs,group_avg_blended,SBS42,tumor_type) %>%
   mutate(m_f = case_when(tumor_type %in% c("IDH_WT_M","IDH_mutant_M") ~ "Male",
                          tumor_type %in% c("IDH_WT_F","IDH_mutant_F") ~ "Female"))
 
-wilcox.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="less")
+
 wilcox.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="two.sided")
-t.test(SBS42 ~ m_f, data= sig_w_for_stats,alternative="less")
+
 
 ggplot(sig_w_for_stats, aes(x=sig_extraction_snvs, y=SBS42,fill=m_f)) +
   # geom_violin() +
